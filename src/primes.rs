@@ -59,9 +59,32 @@ impl Sieve {
         }
     }
 
+    /// Filter from a prime sieve to get Pythagorean primes satisfying p % 4 == 1
+    pub fn pythagorean(limit: u64) -> Sieve {
+        Sieve {
+            primes: Sieve::eratosthenes(limit).into_iter().filter(|p| p % 4 == 1).collect(),
+            limit: limit,
+        }
+    }
+
+    /// Return true iff n is coprime to this sieve's primes. If this sieve's primes are complete
+    /// then this should always return false except when n == 1.
+    pub fn is_coprime(&self, n: u64) -> bool {
+        assert!(self.limit >= n, "Sieve must contain all primes at or below n");
+        for &p in self.iter() {
+            if n % p == 0 {
+                return false
+            }
+            if n < p {
+                break;
+            }
+        }
+        true
+    }
+
     // Using a prime sieve to factor n, calculate phi with the product formula
     // phi(n) = n product_{distinct p|n} (1 - 1/p)
-    pub fn euler_totient(self: &Sieve, n: u64) -> u64 {
+    pub fn euler_totient(&self, n: u64) -> u64 {
         assert_ne!(0, n, "euler_totient(n) undefined for n == 0");
         assert!(self.limit * self.limit >= n,
                 "Sieve must contain all primes at or below sqrt(n)");
@@ -84,8 +107,12 @@ impl Sieve {
         totient
     }
 
-    pub fn iter(self: &Sieve) -> slice::Iter<u64> {
+    pub fn iter(&self) -> slice::Iter<u64> {
         self.primes.iter()
+    }
+
+    pub fn into_iter(self) -> std::vec::IntoIter<u64> {
+        self.primes.into_iter()
     }
 }
 
@@ -100,13 +127,45 @@ fn test_gcd() {
 }
 
 #[test]
-fn test_sieve_of_eratosthenes() {
+fn test_sieve_eratosthenes() {
     assert_eq!(vec![&0; 0], Sieve::eratosthenes(0).iter().collect::<Vec<_>>());
     assert_eq!(vec![&0; 0], Sieve::eratosthenes(1).iter().collect::<Vec<_>>());
     assert_eq!(vec![&2], Sieve::eratosthenes(2).iter().collect::<Vec<_>>());
     assert_eq!(vec![&2, &3], Sieve::eratosthenes(3).iter().collect::<Vec<_>>());
     assert_eq!(vec![&2, &3, &5, &7, &11, &13, &17, &19],
                Sieve::eratosthenes(20).iter().collect::<Vec<_>>());
+}
+
+#[test]
+fn test_sieve_pythagorean() {
+    assert_eq!(vec![&0; 0], Sieve::pythagorean(0).iter().collect::<Vec<_>>());
+    assert_eq!(vec![&0; 0], Sieve::pythagorean(1).iter().collect::<Vec<_>>());
+    assert_eq!(vec![&5], Sieve::pythagorean(5).iter().collect::<Vec<_>>());
+    assert_eq!(vec![&5, &13], Sieve::pythagorean(13).iter().collect::<Vec<_>>());
+    assert_eq!(vec![&5, &13, &17, &29, &37, &41],
+               Sieve::pythagorean(50).iter().collect::<Vec<_>>());
+}
+
+#[test]
+fn test_is_coprime_eratosthenes() {
+    let sieve = Sieve::eratosthenes(9);
+    assert_eq!(false, sieve.is_coprime(0));
+    assert_eq!(true, sieve.is_coprime(1));
+    assert_eq!(false, sieve.is_coprime(2));
+    assert_eq!(false, sieve.is_coprime(3));
+    assert_eq!(false, sieve.is_coprime(4));
+    assert_eq!(false, sieve.is_coprime(5));
+}
+
+#[test]
+fn test_is_coprime_pythagorean() {
+    let sieve = Sieve::pythagorean(9);
+    assert_eq!(false, sieve.is_coprime(0));
+    assert_eq!(true, sieve.is_coprime(1));
+    assert_eq!(true, sieve.is_coprime(2));
+    assert_eq!(true, sieve.is_coprime(3));
+    assert_eq!(true, sieve.is_coprime(4));
+    assert_eq!(false, sieve.is_coprime(5));
 }
 
 #[test]
