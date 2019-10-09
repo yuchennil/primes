@@ -116,80 +116,83 @@ impl Sieve {
     }
 }
 
-/// Unit tests
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_gcd() {
-    assert_eq!(4, gcd(8, 12));
-    assert_eq!(4, gcd(12, 8));
-    assert_eq!(15, gcd(15, 15));
-    assert_eq!(1, gcd(47, 23));
-}
+    #[test]
+    fn gcd_correct() {
+        assert_eq!(4, gcd(8, 12));
+        assert_eq!(4, gcd(12, 8));
+        assert_eq!(15, gcd(15, 15));
+        assert_eq!(1, gcd(47, 23));
+    }
 
-#[test]
-fn test_sieve_eratosthenes() {
-    assert_eq!(vec![&0; 0], Sieve::eratosthenes(0).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&0; 0], Sieve::eratosthenes(1).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&2], Sieve::eratosthenes(2).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&2, &3], Sieve::eratosthenes(3).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&2, &3, &5, &7, &11, &13, &17, &19],
-               Sieve::eratosthenes(20).iter().collect::<Vec<_>>());
-}
+    #[test]
+    fn sieve_eratosthenes() {
+        assert_eq!(vec![&0; 0], Sieve::eratosthenes(0).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&0; 0], Sieve::eratosthenes(1).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&2], Sieve::eratosthenes(2).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&2, &3], Sieve::eratosthenes(3).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&2, &3, &5, &7, &11, &13, &17, &19],
+                   Sieve::eratosthenes(20).iter().collect::<Vec<_>>());
+    }
 
-#[test]
-fn test_sieve_pythagorean() {
-    assert_eq!(vec![&0; 0], Sieve::pythagorean(0).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&0; 0], Sieve::pythagorean(1).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&5], Sieve::pythagorean(5).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&5, &13], Sieve::pythagorean(13).iter().collect::<Vec<_>>());
-    assert_eq!(vec![&5, &13, &17, &29, &37, &41],
-               Sieve::pythagorean(50).iter().collect::<Vec<_>>());
-}
+    #[test]
+    fn sieve_pythagorean() {
+        assert_eq!(vec![&0; 0], Sieve::pythagorean(0).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&0; 0], Sieve::pythagorean(1).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&5], Sieve::pythagorean(5).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&5, &13], Sieve::pythagorean(13).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&5, &13, &17, &29, &37, &41],
+                   Sieve::pythagorean(50).iter().collect::<Vec<_>>());
+    }
 
-#[test]
-fn test_is_coprime_eratosthenes() {
-    let sieve = Sieve::eratosthenes(9);
-    assert_eq!(false, sieve.is_coprime(0));
-    assert_eq!(true, sieve.is_coprime(1));
-    assert_eq!(false, sieve.is_coprime(2));
-    assert_eq!(false, sieve.is_coprime(3));
-    assert_eq!(false, sieve.is_coprime(4));
-    assert_eq!(false, sieve.is_coprime(5));
-}
+    #[test]
+    fn is_coprime_eratosthenes() {
+        let sieve = Sieve::eratosthenes(9);
+        assert_eq!(false, sieve.is_coprime(0));
+        assert_eq!(true, sieve.is_coprime(1));
+        assert_eq!(false, sieve.is_coprime(2));
+        assert_eq!(false, sieve.is_coprime(3));
+        assert_eq!(false, sieve.is_coprime(4));
+        assert_eq!(false, sieve.is_coprime(5));
+    }
 
-#[test]
-fn test_is_coprime_pythagorean() {
-    let sieve = Sieve::pythagorean(9);
-    assert_eq!(false, sieve.is_coprime(0));
-    assert_eq!(true, sieve.is_coprime(1));
-    assert_eq!(true, sieve.is_coprime(2));
-    assert_eq!(true, sieve.is_coprime(3));
-    assert_eq!(true, sieve.is_coprime(4));
-    assert_eq!(false, sieve.is_coprime(5));
-}
+    #[test]
+    fn is_coprime_pythagorean() {
+        let sieve = Sieve::pythagorean(9);
+        assert_eq!(false, sieve.is_coprime(0));
+        assert_eq!(true, sieve.is_coprime(1));
+        assert_eq!(true, sieve.is_coprime(2));
+        assert_eq!(true, sieve.is_coprime(3));
+        assert_eq!(true, sieve.is_coprime(4));
+        assert_eq!(false, sieve.is_coprime(5));
+    }
 
-#[test]
-fn test_euler_totient() {
-    let sieve = Sieve::eratosthenes(9);
-    assert_eq!(1, sieve.euler_totient(1));
-    assert_eq!(1, sieve.euler_totient(2));
-    assert_eq!(2, sieve.euler_totient(3));
-    assert_eq!(2, sieve.euler_totient(4));
-    assert_eq!(16, sieve.euler_totient(17));
-    assert_eq!(8, sieve.euler_totient(24));
-    assert_eq!(54, sieve.euler_totient(81));
-}
+    #[test]
+    fn euler_totient_correct() {
+        let sieve = Sieve::eratosthenes(9);
+        assert_eq!(1, sieve.euler_totient(1));
+        assert_eq!(1, sieve.euler_totient(2));
+        assert_eq!(2, sieve.euler_totient(3));
+        assert_eq!(2, sieve.euler_totient(4));
+        assert_eq!(16, sieve.euler_totient(17));
+        assert_eq!(8, sieve.euler_totient(24));
+        assert_eq!(54, sieve.euler_totient(81));
+    }
 
-#[test]
-#[should_panic]
-fn test_zero_euler_totient() {
-    let sieve = Sieve::eratosthenes(7);
-    sieve.euler_totient(0);
-}
+    #[test]
+    #[should_panic]
+    fn euler_totient_zero() {
+        let sieve = Sieve::eratosthenes(7);
+        sieve.euler_totient(0);
+    }
 
-#[test]
-#[should_panic]
-fn test_sieve_too_small_euler_totient() {
-    let sieve = Sieve::eratosthenes(7);
-    sieve.euler_totient(50);
+    #[test]
+    #[should_panic]
+    fn euler_totient_sieve_too_small() {
+        let sieve = Sieve::eratosthenes(7);
+        sieve.euler_totient(50);
+    }
 }
