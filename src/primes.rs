@@ -1,5 +1,6 @@
 /// Library for utilities related to primes
 
+use std::collections;
 use std::slice;
 
 /// Euclidean algorithm
@@ -107,6 +108,23 @@ impl Sieve {
         totient
     }
 
+    pub fn factor(&self, n: u64) -> collections::BTreeMap<u64, u64> {
+        assert_ne!(0, n, "factors of n undefined for n == 0");
+        assert!(n <= self.limit, "Sieve must contain all primes at or below n");
+        let mut n = n;
+        let mut prime_factors = collections::BTreeMap::new();
+        for &p in self.iter() {
+            while n % p == 0 {
+                *prime_factors.entry(p).or_insert(0) += 1;
+                n /= p;
+            }
+            if n == 1 {
+                break;
+            }
+        }
+        prime_factors
+    }
+
     pub fn iter(&self) -> slice::Iter<u64> {
         self.primes.iter()
     }
@@ -194,5 +212,29 @@ mod tests {
     fn euler_totient_sieve_too_small() {
         let sieve = Sieve::eratosthenes(7);
         sieve.euler_totient(50);
+    }
+
+    #[test]
+    fn factor_correct() {
+        let sieve = Sieve::eratosthenes(12);
+        assert_eq!(vec![(&0, &0); 0], sieve.factor(1).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&2, &1)], sieve.factor(2).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&3, &1)], sieve.factor(3).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&2, &2)], sieve.factor(4).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&2, &2), (&3, &1)], sieve.factor(12).iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    #[should_panic]
+    fn factor_zero() {
+        let sieve = Sieve::eratosthenes(7);
+        sieve.factor(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn factor_sieve_too_small() {
+        let sieve = Sieve::eratosthenes(7);
+        sieve.factor(50);
     }
 }
