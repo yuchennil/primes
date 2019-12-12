@@ -3,6 +3,8 @@
 use std::collections;
 use std::slice;
 
+use crate::combinatorics;
+
 /// Euclidean algorithm
 pub fn gcd(a: u64, b: u64) -> u64 {
     let mut a = a;
@@ -108,8 +110,8 @@ impl Sieve {
         totient
     }
 
-    pub fn factor(&self, n: u64) -> collections::BTreeMap<u64, u64> {
-        assert_ne!(0, n, "factors of n undefined for n == 0");
+    fn prime_factor(&self, n: u64) -> collections::BTreeMap<u64, u32> {
+        assert_ne!(0, n, "prime factors of n undefined for n == 0");
         assert!(n <= self.limit, "Sieve must contain all primes at or below n");
         let mut n = n;
         let mut prime_factors = collections::BTreeMap::new();
@@ -123,6 +125,18 @@ impl Sieve {
             }
         }
         prime_factors
+    }
+
+    pub fn factor(&self, n: u64) -> Vec<u64> {
+        let prime_factors = self.prime_factor(n).into_iter().collect::<Vec<_>>();
+        let factor_combinations = combinatorics::combinations_with_repeats(&prime_factors);
+        let mut factors = Vec::new();
+        for factor_combination in factor_combinations {
+            factors.push(factor_combination.into_iter().map(
+                |(prime, power)| prime.pow(power)).fold(1, |a, b| a * b));
+        }
+        factors.sort();
+        factors
     }
 
     pub fn iter(&self) -> slice::Iter<u64> {
@@ -215,26 +229,36 @@ mod tests {
     }
 
     #[test]
+    fn prime_factor_correct() {
+        let sieve = Sieve::eratosthenes(12);
+        assert_eq!(vec![(&0, &0); 0], sieve.prime_factor(1).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&2, &1)], sieve.prime_factor(2).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&3, &1)], sieve.prime_factor(3).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&2, &2)], sieve.prime_factor(4).iter().collect::<Vec<_>>());
+        assert_eq!(vec![(&2, &2), (&3, &1)], sieve.prime_factor(12).iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    #[should_panic]
+    fn prime_factor_zero() {
+        let sieve = Sieve::eratosthenes(7);
+        sieve.prime_factor(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn prime_factor_sieve_too_small() {
+        let sieve = Sieve::eratosthenes(7);
+        sieve.prime_factor(50);
+    }
+
+    #[test]
     fn factor_correct() {
         let sieve = Sieve::eratosthenes(12);
-        assert_eq!(vec![(&0, &0); 0], sieve.factor(1).iter().collect::<Vec<_>>());
-        assert_eq!(vec![(&2, &1)], sieve.factor(2).iter().collect::<Vec<_>>());
-        assert_eq!(vec![(&3, &1)], sieve.factor(3).iter().collect::<Vec<_>>());
-        assert_eq!(vec![(&2, &2)], sieve.factor(4).iter().collect::<Vec<_>>());
-        assert_eq!(vec![(&2, &2), (&3, &1)], sieve.factor(12).iter().collect::<Vec<_>>());
-    }
-
-    #[test]
-    #[should_panic]
-    fn factor_zero() {
-        let sieve = Sieve::eratosthenes(7);
-        sieve.factor(0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn factor_sieve_too_small() {
-        let sieve = Sieve::eratosthenes(7);
-        sieve.factor(50);
+        assert_eq!(vec![&1], sieve.factor(1).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&1, &2], sieve.factor(2).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&1, &3], sieve.factor(3).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&1, &2, &4], sieve.factor(4).iter().collect::<Vec<_>>());
+        assert_eq!(vec![&1, &2, &3, &4, &6, &12], sieve.factor(12).iter().collect::<Vec<_>>());
     }
 }
