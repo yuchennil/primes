@@ -129,9 +129,8 @@ impl Sieve {
 
     pub fn factor(&self, n: u64) -> Vec<u64> {
         let prime_factors = self.prime_factor(n).into_iter().collect::<Vec<_>>();
-        let factor_combinations = combinatorics::combinations_with_repeats(&prime_factors);
         let mut factors = Vec::new();
-        for factor_combination in factor_combinations {
+        for factor_combination in combinatorics::CombinationsWithRepeats::new(&prime_factors) {
             factors.push(factor_combination.into_iter().map(
                 |(prime, power)| prime.pow(power)).fold(1, |a, b| a * b));
         }
