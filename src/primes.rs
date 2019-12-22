@@ -19,14 +19,13 @@ pub struct Sieve {
 }
 
 impl Sieve {
-
     /// Run the Sieve of Eratosthenes to generate primes at or below limit
     pub fn eratosthenes(limit: u64) -> Sieve {
         if limit < 2 {
             return Sieve {
                 primes: Vec::new(),
                 limit,
-            }
+            };
         }
 
         let size_limit = limit as usize + 1;
@@ -38,22 +37,21 @@ impl Sieve {
         while p * p < size_limit {
             // Optimize by starting the multiples search at p^2, p^2 + p, ...
             // instead of 2p, 3p, ...
-            for multiple_p in (p*p..size_limit).step_by(p) {
+            for multiple_p in (p * p..size_limit).step_by(p) {
                 sieve[multiple_p] = false;
             }
-            match (p+1..size_limit).find(|&x| sieve[x]) {
+            match (p + 1..size_limit).find(|&x| sieve[x]) {
                 Some(next_p) => p = next_p,
                 None => break,
             }
         }
 
         Sieve {
-            primes: sieve.iter().enumerate().filter_map(
-                |(i, &x)| if x {
-                    Some(i as u64)
-                } else {
-                    None
-                }).collect(),
+            primes: sieve
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &x)| if x { Some(i as u64) } else { None })
+                .collect(),
             limit,
         }
     }
@@ -61,7 +59,10 @@ impl Sieve {
     /// Filter from a prime sieve to get Pythagorean primes satisfying p % 4 == 1
     pub fn pythagorean(limit: u64) -> Sieve {
         Sieve {
-            primes: Sieve::eratosthenes(limit).into_iter().filter(|p| p % 4 == 1).collect(),
+            primes: Sieve::eratosthenes(limit)
+                .into_iter()
+                .filter(|p| p % 4 == 1)
+                .collect(),
             limit,
         }
     }
@@ -69,10 +70,13 @@ impl Sieve {
     /// Return true iff n is coprime to this sieve's primes. If this sieve's primes are complete
     /// then this should always return false except when n == 1.
     pub fn is_coprime(&self, n: u64) -> bool {
-        assert!(self.limit >= n, "Sieve must contain all primes at or below n");
+        assert!(
+            self.limit >= n,
+            "Sieve must contain all primes at or below n"
+        );
         for &p in self.primes.iter() {
             if n % p == 0 {
-                return false
+                return false;
             }
             if n < p {
                 break;
@@ -105,22 +109,50 @@ mod tests {
 
     #[test]
     fn sieve_eratosthenes() {
-        assert_eq!(vec![0; 0], Sieve::eratosthenes(0).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![0; 0], Sieve::eratosthenes(1).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![2], Sieve::eratosthenes(2).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![2, 3], Sieve::eratosthenes(3).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![2, 3, 5, 7, 11, 13, 17, 19],
-                   Sieve::eratosthenes(20).into_iter().collect::<Vec<_>>());
+        assert_eq!(
+            vec![0; 0],
+            Sieve::eratosthenes(0).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![0; 0],
+            Sieve::eratosthenes(1).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![2],
+            Sieve::eratosthenes(2).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![2, 3],
+            Sieve::eratosthenes(3).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![2, 3, 5, 7, 11, 13, 17, 19],
+            Sieve::eratosthenes(20).into_iter().collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn sieve_pythagorean() {
-        assert_eq!(vec![0; 0], Sieve::pythagorean(0).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![0; 0], Sieve::pythagorean(1).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![5], Sieve::pythagorean(5).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![5, 13], Sieve::pythagorean(13).into_iter().collect::<Vec<_>>());
-        assert_eq!(vec![5, 13, 17, 29, 37, 41],
-                   Sieve::pythagorean(50).into_iter().collect::<Vec<_>>());
+        assert_eq!(
+            vec![0; 0],
+            Sieve::pythagorean(0).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![0; 0],
+            Sieve::pythagorean(1).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![5],
+            Sieve::pythagorean(5).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![5, 13],
+            Sieve::pythagorean(13).into_iter().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec![5, 13, 17, 29, 37, 41],
+            Sieve::pythagorean(50).into_iter().collect::<Vec<_>>()
+        );
     }
 
     #[test]
