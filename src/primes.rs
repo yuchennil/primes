@@ -25,7 +25,7 @@ impl Sieve {
         if limit < 2 {
             return Sieve {
                 primes: Vec::new(),
-                limit: limit,
+                limit,
             }
         }
 
@@ -49,11 +49,12 @@ impl Sieve {
 
         Sieve {
             primes: sieve.iter().enumerate().filter_map(
-                |(i, &x)| match x {
-                    true => Some(i as u64),
-                    false => None,
+                |(i, &x)| if x {
+                    Some(i as u64)
+                } else {
+                    None
                 }).collect(),
-            limit: limit,
+            limit,
         }
     }
 
@@ -61,7 +62,7 @@ impl Sieve {
     pub fn pythagorean(limit: u64) -> Sieve {
         Sieve {
             primes: Sieve::eratosthenes(limit).into_iter().filter(|p| p % 4 == 1).collect(),
-            limit: limit,
+            limit,
         }
     }
 
@@ -79,8 +80,13 @@ impl Sieve {
         }
         true
     }
+}
 
-    pub fn into_iter(self) -> std::vec::IntoIter<u64> {
+impl IntoIterator for Sieve {
+    type Item = u64;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.primes.into_iter()
     }
 }
