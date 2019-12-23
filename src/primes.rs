@@ -55,35 +55,6 @@ impl Sieve {
             limit,
         }
     }
-
-    /// Filter from a prime sieve to get Pythagorean primes satisfying p % 4 == 1
-    pub fn pythagorean(limit: u64) -> Sieve {
-        Sieve {
-            primes: Sieve::eratosthenes(limit)
-                .into_iter()
-                .filter(|p| p % 4 == 1)
-                .collect(),
-            limit,
-        }
-    }
-
-    /// Return true iff n is coprime to this sieve's primes. If this sieve's primes are complete
-    /// then this should always return false except when n == 1.
-    pub fn is_coprime(&self, n: u64) -> bool {
-        assert!(
-            self.limit >= n,
-            "Sieve must contain all primes at or below n"
-        );
-        for &p in self.primes.iter() {
-            if n % p == 0 {
-                return false;
-            }
-            if n < p {
-                break;
-            }
-        }
-        true
-    }
 }
 
 impl IntoIterator for Sieve {
@@ -129,51 +100,5 @@ mod tests {
             vec![2, 3, 5, 7, 11, 13, 17, 19],
             Sieve::eratosthenes(20).into_iter().collect::<Vec<_>>()
         );
-    }
-
-    #[test]
-    fn sieve_pythagorean() {
-        assert_eq!(
-            vec![0; 0],
-            Sieve::pythagorean(0).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![0; 0],
-            Sieve::pythagorean(1).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![5],
-            Sieve::pythagorean(5).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![5, 13],
-            Sieve::pythagorean(13).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![5, 13, 17, 29, 37, 41],
-            Sieve::pythagorean(50).into_iter().collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn is_coprime_eratosthenes() {
-        let sieve = Sieve::eratosthenes(9);
-        assert_eq!(false, sieve.is_coprime(0));
-        assert_eq!(true, sieve.is_coprime(1));
-        assert_eq!(false, sieve.is_coprime(2));
-        assert_eq!(false, sieve.is_coprime(3));
-        assert_eq!(false, sieve.is_coprime(4));
-        assert_eq!(false, sieve.is_coprime(5));
-    }
-
-    #[test]
-    fn is_coprime_pythagorean() {
-        let sieve = Sieve::pythagorean(9);
-        assert_eq!(false, sieve.is_coprime(0));
-        assert_eq!(true, sieve.is_coprime(1));
-        assert_eq!(true, sieve.is_coprime(2));
-        assert_eq!(true, sieve.is_coprime(3));
-        assert_eq!(true, sieve.is_coprime(4));
-        assert_eq!(false, sieve.is_coprime(5));
     }
 }
