@@ -28,29 +28,40 @@ impl Sieve {
             };
         }
 
-        let size_limit = limit as usize + 1;
-        let mut sieve = vec![true; size_limit];
-        sieve[0] = false;
-        sieve[1] = false;
+        fn to_sieve(prime: u64) -> usize {
+            ((prime - 1) / 2) as usize
+        }
+        fn to_prime(sieve: usize) -> u64 {
+            2 * sieve as u64 + 1
+        }
 
-        let mut p = 2;
-        while p * p < size_limit {
-            // Optimize by starting the multiples search at p^2, p^2 + p, ...
+        let mut sieve = vec![true; to_sieve(limit) + 1];
+        // to_sieve(1) == 0
+        sieve[0] = false;
+
+        let mut p = 3;
+        while p * p <= limit {
+            // Optimize by starting the multiples search at p^2, p^2 + 2p, ...
             // instead of 2p, 3p, ...
-            for multiple_p in (p * p..size_limit).step_by(p) {
-                sieve[multiple_p] = false;
+            for multiple_p in (p * p..=limit).step_by(2 * p as usize) {
+                sieve[to_sieve(multiple_p)] = false;
             }
-            match (p + 1..size_limit).find(|&x| sieve[x]) {
+            match (p + 2..=limit).step_by(2).find(|&n| sieve[to_sieve(n)]) {
                 Some(next_p) => p = next_p,
                 None => break,
             }
         }
 
         Sieve {
-            primes: sieve
-                .iter()
-                .enumerate()
-                .filter_map(|(i, &x)| if x { Some(i as u64) } else { None })
+            primes: vec![2]
+                .into_iter()
+                .chain(sieve.iter().enumerate().filter_map(|(p, &x)| {
+                    if x {
+                        Some(to_prime(p))
+                    } else {
+                        None
+                    }
+                }))
                 .collect(),
             limit,
         }
@@ -97,8 +108,8 @@ mod tests {
             Sieve::eratosthenes(3).into_iter().collect::<Vec<_>>()
         );
         assert_eq!(
-            vec![2, 3, 5, 7, 11, 13, 17, 19],
-            Sieve::eratosthenes(20).into_iter().collect::<Vec<_>>()
+            vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
+            Sieve::eratosthenes(50).into_iter().collect::<Vec<_>>()
         );
     }
 }
