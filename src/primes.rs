@@ -43,11 +43,13 @@ impl Sieve {
         while p * p <= limit {
             // Optimize by starting the multiples search at p^2, p^2 + 2p, ...
             // instead of 2p, 3p, ...
-            for multiple_p in (p * p..=limit).step_by(2 * p as usize) {
-                sieve[to_sieve(multiple_p)] = false;
+            //
+            // Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
+            for multiple in (to_sieve(p * p)..sieve.len()).step_by(p as usize) {
+                sieve[multiple] = false;
             }
-            match (p + 2..=limit).step_by(2).find(|&n| sieve[to_sieve(n)]) {
-                Some(next_p) => p = next_p,
+            match (to_sieve(p) + 1..sieve.len()).find(|&n| sieve[n]) {
+                Some(next) => p = to_prime(next),
                 None => break,
             }
         }
