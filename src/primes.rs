@@ -19,6 +19,37 @@ pub struct Sieve {
     limit: u64,
 }
 
+impl Sieve {
+    /// Run the Sieve of Eratosthenes to generate primes at or below limit
+    pub fn eratosthenes(limit: u64) -> Sieve {
+        Sieve {
+            segments: vec![SieveSegment::eratosthenes(limit)],
+            limit,
+        }
+    }
+
+    /// Run a segmented Sieve of Eratosthenes to save memory while generating primes.
+    ///
+    /// The segment length is just above sqrt(limit) so that the origin segment suffices to sieve
+    /// all remaining segments (which hence don't need to be kept in memory after we've finished
+    /// sieving through them).
+    pub fn segmented(limit: u64) -> Sieve {
+        let segment_length = cmp::max(1, (limit as f64).sqrt().ceil() as u64);
+        let origin = SieveSegment::eratosthenes(segment_length);
+
+        let mut segments = Vec::new();
+        for start in (segment_length..limit).step_by(segment_length as usize) {
+            let end = cmp::min(start + segment_length, limit);
+            segments.push(SieveSegment::from_origin(start, end, &origin));
+        }
+
+        Sieve {
+            segments: vec![origin].into_iter().chain(segments).collect(),
+            limit,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct SieveSegment {
     primes: Vec<u64>,
@@ -26,25 +57,15 @@ struct SieveSegment {
     end: u64,
 }
 
-impl Sieve {
-    /// Run the Sieve of Eratosthenes to generate primes at or below limit
-    pub fn eratosthenes(limit: u64) -> Sieve {
+impl SieveSegment {
+    /// Sieve an origin segment [0, limit) using Eratosthenes optimized by skipping evens after 2.
+    fn eratosthenes(limit: u64) -> SieveSegment {
         if limit <= 2 {
-            return Sieve {
-                segments: vec![SieveSegment {
-                    primes: Vec::new(),
-                    start: 0,
-                    end: limit,
-                }],
-                limit,
+            return SieveSegment {
+                primes: Vec::new(),
+                start: 0,
+                end: limit,
             };
-        }
-
-        fn to_sieve(prime: u64) -> usize {
-            ((prime - 1) / 2) as usize
-        }
-        fn to_prime(sieve: usize) -> u64 {
-            2 * sieve as u64 + 1
         }
 
         let mut sieve = vec![true; to_sieve(limit + 1)];
@@ -66,7 +87,7 @@ impl Sieve {
             }
         }
 
-        let segment = SieveSegment {
+        SieveSegment {
             primes: vec![2]
                 .into_iter()
                 .chain(sieve.iter().enumerate().filter_map(|(p, &x)| {
@@ -79,69 +100,45 @@ impl Sieve {
                 .collect(),
             start: 0,
             end: limit,
-        };
-        Sieve {
-            segments: vec![segment],
-            limit,
         }
     }
 
-    /// Run a segmented Sieve of Eratosthenes to save memory while generating primes.
-    ///
-    /// The segment length is just above sqrt(limit) so that the origin segment suffices to sieve
-    /// all remaining segments (which hence don't need to be kept in memory after we've finished
-    /// sieving through them).
-    pub fn segmented(limit: u64) -> Sieve {
-        let segment_length = (limit as f64).sqrt() as u64 + 1;
-        let origin = SieveSegment {
-            primes: Sieve::eratosthenes(segment_length).into_iter().collect(),
-            start: 0,
-            end: segment_length,
-        };
-        let mut segments = Vec::new();
-        for start in (segment_length..limit).step_by(segment_length as usize) {
-            segments.push(SieveSegment::from_origin(
-                start,
-                cmp::min(start + segment_length, limit),
-                &origin,
-            ));
-        }
-
-        Sieve {
-            segments: vec![origin].into_iter().chain(segments).collect(),
-            limit,
-        }
-    }
-}
-
-impl SieveSegment {
     /// Sieve a segment [start, end) based on an origin segment.
     fn from_origin(start: u64, end: u64, origin: &SieveSegment) -> SieveSegment {
         assert_eq!(0, origin.start);
         assert!(origin.end.pow(2) >= end);
+
         let mut sieve = vec![true; (end - start) as usize];
         for prime in &origin.primes {
-            for multiple in
-                (cmp::max(prime * prime, (start / prime) * prime)..end).step_by(*prime as usize)
-            {
-                if multiple < start {
-                    continue;
-                }
+            // Optimize by starting the multiples search at prime^2, or the first multiple after
+            // start, whichever is greater.
+            let prime_start = cmp::max(
+                prime * prime,
+                (start / prime + (start % prime != 0) as u64) * prime,
+            );
+            for multiple in (prime_start..end).step_by(*prime as usize) {
                 sieve[(multiple - start) as usize] = false;
             }
         }
         SieveSegment {
+            primes: sieve
+                .iter()
+                .enumerate()
+                .filter_map(|(p, &x)| if x { Some(p as u64 + start) } else { None })
+                .collect(),
             start,
             end,
-            primes: {
-                sieve
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(p, &x)| if x { Some(p as u64 + start) } else { None })
-                    .collect()
-            },
         }
     }
+}
+
+/// Convenience functions to convert between prime space (u64 numbers) and sieve space
+/// (usizes corresponding to encoded odd u64s).
+fn to_sieve(prime: u64) -> usize {
+    ((prime - 1) / 2) as usize
+}
+fn to_prime(sieve: usize) -> u64 {
+    2 * sieve as u64 + 1
 }
 
 impl IntoIterator for Sieve {
