@@ -108,27 +108,37 @@ impl SieveSegment {
         assert_eq!(0, origin.start);
         assert!(origin.end.pow(2) >= end);
 
-        let mut sieve = vec![true; (end - start) as usize];
-        for prime in &origin.primes {
-            // Optimize by starting the multiples search at prime^2, or the first multiple after
-            // start, whichever is greater.
-            let prime_start = cmp::max(
-                prime * prime,
-                (start / prime + (start % prime != 0) as u64) * prime,
-            );
-            for multiple in (prime_start..end).step_by(*prime as usize) {
-                sieve[(multiple - start) as usize] = false;
+        // If start is even, then set sieve_start to point at the first odd after it: start + 1.
+        // If start is odd, then adding 1 won't make a difference: to_sieve(start + 1) will still
+        // point at start. Same with sieve_end.
+        let sieve_start = to_sieve(start + 1);
+        let sieve_end = to_sieve(end + 1);
+        let sieve_size = sieve_end - sieve_start;
+        let mut sieve = vec![true; sieve_size];
+        // Don't sieve 2 if it exists.
+        for &p in origin.primes.iter().skip(1) {
+            // Optimize by starting the multiples search at p^2, or the first odd multiple of p
+            // after start, whichever is greater.
+            let p_sieve_start =
+                to_sieve(cmp::max(p * p, p * ceil_odd(ceil_div(start, p)))) - sieve_start;
+            for multiple in (p_sieve_start..sieve_size).step_by(p as usize) {
+                sieve[multiple] = false;
             }
         }
-        SieveSegment {
-            primes: sieve
-                .iter()
-                .enumerate()
-                .filter_map(|(p, &x)| if x { Some(p as u64 + start) } else { None })
-                .collect(),
-            start,
-            end,
+
+        let mut primes = Vec::new();
+        // We've only sieved odd primes, so 2 will need to be manually prepended, if necessary.
+        if start <= 2 && end > 2 {
+            primes.push(2);
         }
+        primes.extend(sieve.into_iter().enumerate().filter_map(|(p, x)| {
+            if x {
+                Some(to_prime(p + sieve_start))
+            } else {
+                None
+            }
+        }));
+        SieveSegment { primes, start, end }
     }
 }
 
@@ -139,6 +149,13 @@ fn to_sieve(prime: u64) -> usize {
 }
 fn to_prime(sieve: usize) -> u64 {
     2 * sieve as u64 + 1
+}
+/// Convenience functions to find u64 ceilings
+fn ceil_div(numerator: u64, divisor: u64) -> u64 {
+    numerator / divisor + ((numerator % divisor) != 0) as u64
+}
+fn ceil_odd(n: u64) -> u64 {
+    n + (n + 1) % 2
 }
 
 impl IntoIterator for Sieve {
@@ -275,5 +292,10 @@ mod tests {
             vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
             sieve_segment.primes.to_vec()
         );
+    }
+
+    #[test]
+    fn segmented_bench() {
+        let sieve = Sieve::segmented(10_u64.pow(9));
     }
 }
