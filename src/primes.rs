@@ -15,19 +15,14 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 
 #[derive(Debug)]
 pub struct Sieve {
-    segments: Vec<SieveSegment>,
+    origin: SieveSegment,
+    current_iter: std::vec::IntoIter<u64>,
+    current_end: u64,
+    segment_length: u64,
     limit: u64,
 }
 
 impl Sieve {
-    /// Run the Sieve of Eratosthenes to generate primes at or below limit
-    pub fn eratosthenes(limit: u64) -> Sieve {
-        Sieve {
-            segments: vec![SieveSegment::eratosthenes(limit)],
-            limit,
-        }
-    }
-
     /// Run a segmented Sieve of Eratosthenes to save memory while generating primes.
     ///
     /// segment_length is just above sqrt(limit) so that the origin segment suffices to sieve
@@ -35,33 +30,41 @@ impl Sieve {
     /// sieving through them).
     pub fn segmented(limit: u64) -> Sieve {
         let segment_length = cmp::max(1, (limit as f64).sqrt().ceil() as u64);
+        let origin = SieveSegment::eratosthenes(segment_length);
+        // TODO avoid cloning the origin segment
+        let current_iter = origin.clone().into_iter();
+        let current_end = segment_length;
 
-        let mut segments = vec![SieveSegment::eratosthenes(segment_length)];
-        for start in (segment_length..limit).step_by(segment_length as usize) {
-            let end = cmp::min(start + segment_length, limit);
-            segments.push(SieveSegment::from_origin(start, end, &segments[0]));
+        Sieve {
+            origin,
+            current_iter,
+            current_end,
+            segment_length,
+            limit,
         }
-
-        Sieve { segments, limit }
     }
 }
 
-impl IntoIterator for Sieve {
+impl Iterator for Sieve {
     type Item = u64;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        let result = self
-            .segments
-            .into_iter()
-            .map(|segment| segment.primes.into_iter())
-            .flatten()
-            .collect::<Vec<_>>();
-        result.into_iter()
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(item) = self.current_iter.next() {
+                return Some(item);
+            }
+            let start = self.current_end;
+            if start == self.limit {
+                return None;
+            }
+            self.current_end = cmp::min(start + self.segment_length, self.limit);
+            self.current_iter =
+                SieveSegment::from_origin(start, self.current_end, &self.origin).into_iter();
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct SieveSegment {
     primes: Vec<u64>,
     start: u64,
@@ -106,6 +109,15 @@ impl SieveSegment {
             start,
             end,
         }
+    }
+}
+
+impl IntoIterator for SieveSegment {
+    type Item = u64;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.primes.into_iter()
     }
 }
 
@@ -212,60 +224,45 @@ mod tests {
     }
 
     #[test]
-    fn sieve_eratosthenes() {
-        assert_eq!(
-            vec![0; 0],
-            Sieve::eratosthenes(0).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![0; 0],
-            Sieve::eratosthenes(1).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![0; 0],
-            Sieve::eratosthenes(2).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![2],
-            Sieve::eratosthenes(3).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![2, 3],
-            Sieve::eratosthenes(4).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
-            Sieve::eratosthenes(50).into_iter().collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
     fn sieve_segmented() {
-        assert_eq!(
-            vec![0; 0],
-            Sieve::segmented(0).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![0; 0],
-            Sieve::segmented(1).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(
-            vec![0; 0],
-            Sieve::segmented(2).into_iter().collect::<Vec<_>>()
-        );
-        assert_eq!(vec![2], Sieve::segmented(3).into_iter().collect::<Vec<_>>());
-        assert_eq!(
-            vec![2, 3],
-            Sieve::segmented(4).into_iter().collect::<Vec<_>>()
-        );
+        assert_eq!(vec![0; 0], Sieve::segmented(0).collect::<Vec<_>>());
+        assert_eq!(vec![0; 0], Sieve::segmented(1).collect::<Vec<_>>());
+        assert_eq!(vec![0; 0], Sieve::segmented(2).collect::<Vec<_>>());
+        assert_eq!(vec![2], Sieve::segmented(3).collect::<Vec<_>>());
+        assert_eq!(vec![2, 3], Sieve::segmented(4).collect::<Vec<_>>());
         assert_eq!(
             vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
-            Sieve::segmented(50).into_iter().collect::<Vec<_>>()
+            Sieve::segmented(50).collect::<Vec<_>>()
         );
     }
 
     #[test]
     fn sieve_segment_eratosthenes() {
+        let sieve_segment = SieveSegment::eratosthenes(0);
+        assert_eq!(0, sieve_segment.start);
+        assert_eq!(0, sieve_segment.end);
+        assert_eq!(vec![0; 0], sieve_segment.primes.to_vec());
+
+        let sieve_segment = SieveSegment::eratosthenes(1);
+        assert_eq!(0, sieve_segment.start);
+        assert_eq!(1, sieve_segment.end);
+        assert_eq!(vec![0; 0], sieve_segment.primes.to_vec());
+
+        let sieve_segment = SieveSegment::eratosthenes(2);
+        assert_eq!(0, sieve_segment.start);
+        assert_eq!(2, sieve_segment.end);
+        assert_eq!(vec![0; 0], sieve_segment.primes.to_vec());
+
+        let sieve_segment = SieveSegment::eratosthenes(3);
+        assert_eq!(0, sieve_segment.start);
+        assert_eq!(3, sieve_segment.end);
+        assert_eq!(vec![2], sieve_segment.primes.to_vec());
+
+        let sieve_segment = SieveSegment::eratosthenes(4);
+        assert_eq!(0, sieve_segment.start);
+        assert_eq!(4, sieve_segment.end);
+        assert_eq!(vec![2, 3], sieve_segment.primes.to_vec());
+
         let sieve_segment = SieveSegment::eratosthenes(50);
         assert_eq!(0, sieve_segment.start);
         assert_eq!(50, sieve_segment.end);
