@@ -220,4 +220,60 @@ mod tests {
             Sieve::segmented(50).into_iter().collect::<Vec<_>>()
         );
     }
+
+    #[test]
+    fn sieve_segment_eratosthenes() {
+        let sieve_segment = SieveSegment::eratosthenes(50);
+        assert_eq!(0, sieve_segment.start);
+        assert_eq!(50, sieve_segment.end);
+        assert_eq!(
+            vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
+            sieve_segment.primes.to_vec()
+        );
+    }
+
+    #[test]
+    fn sieve_segment_from_origin() {
+        let origin = SieveSegment::eratosthenes(50);
+
+        let sieve_segment = SieveSegment::from_origin(50, 100, &origin);
+        assert_eq!(50, sieve_segment.start);
+        assert_eq!(100, sieve_segment.end);
+        assert_eq!(
+            vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
+            sieve_segment.primes.to_vec()
+        );
+
+        let sieve_segment = SieveSegment::from_origin(53, 100, &origin);
+        assert_eq!(53, sieve_segment.start);
+        assert_eq!(100, sieve_segment.end);
+        assert_eq!(
+            vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
+            sieve_segment.primes.to_vec()
+        );
+
+        let sieve_segment = SieveSegment::from_origin(54, 100, &origin);
+        assert_eq!(54, sieve_segment.start);
+        assert_eq!(100, sieve_segment.end);
+        assert_eq!(
+            vec![59, 61, 67, 71, 73, 79, 83, 89, 97],
+            sieve_segment.primes.to_vec()
+        );
+
+        let sieve_segment = SieveSegment::from_origin(50, 97, &origin);
+        assert_eq!(50, sieve_segment.start);
+        assert_eq!(97, sieve_segment.end);
+        assert_eq!(
+            vec![53, 59, 61, 67, 71, 73, 79, 83, 89],
+            sieve_segment.primes.to_vec()
+        );
+
+        let sieve_segment = SieveSegment::from_origin(50, 98, &origin);
+        assert_eq!(50, sieve_segment.start);
+        assert_eq!(98, sieve_segment.end);
+        assert_eq!(
+            vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
+            sieve_segment.primes.to_vec()
+        );
+    }
 }
