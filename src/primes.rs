@@ -166,18 +166,7 @@ impl WheelSieveSegment {
         let start = start as usize;
         let end = end as usize;
 
-        let mut data = vec![false; end - start];
-
-        let mut spoke = WheelSieveSegment::first_spoke(start);
-        let mut wheel_iter = WHEEL_SPOKE_DIFFS
-            .iter()
-            .cycle()
-            .skip(SPOKE[spoke % WHEEL_SIZE]);
-        while spoke < end {
-            data[spoke - start] = true;
-            spoke += wheel_iter.next().unwrap();
-        }
-
+        let mut data = vec![true; end - start];
         if start < 2 {
             // Strike 1 from the sieve if it's within bounds, as sieving wouldn't remove it.
             if let Some(e) = data.get_mut(1 - start) {
@@ -199,27 +188,30 @@ impl WheelSieveSegment {
         fn ceil_div(a: usize, b: usize) -> usize {
             a / b + (a % b != 0) as usize
         }
-        let mut factor = cmp::max(p, WheelSieveSegment::first_spoke(ceil_div(self.start, p)));
+        let factor = cmp::max(p, WheelSieveSegment::first_spoke(ceil_div(self.start, p)));
+        let mut segment_multiple = p * factor - self.start;
         let mut wheel_iter = WHEEL_SPOKE_DIFFS
             .iter()
+            .map(|&spoke| p * spoke)
             .cycle()
             .skip(SPOKE[factor % WHEEL_SIZE]);
-        while p * factor < self.end {
-            self.data[p * factor - self.start] = false;
-            factor += wheel_iter.next().unwrap();
+        while segment_multiple < self.end - self.start {
+            self.data[segment_multiple] = false;
+            segment_multiple += wheel_iter.next().unwrap();
         }
     }
 
     /// Find the next prime after p in the sieve, or None
     fn next(&self, p: u64) -> Option<u64> {
-        let mut p = p as usize;
+        let p = p as usize;
+        let mut segment_p = p - self.start;
         let mut wheel_iter = WHEEL_SPOKE_DIFFS.iter().cycle().skip(SPOKE[p % WHEEL_SIZE]);
-        p += wheel_iter.next().unwrap();
-        while p < self.end {
-            if self.data[p - self.start] {
-                return Some(p as u64);
+        segment_p += wheel_iter.next().unwrap();
+        while segment_p < self.end - self.start {
+            if self.data[segment_p] {
+                return Some((segment_p + self.start) as u64);
             }
-            p += wheel_iter.next().unwrap();
+            segment_p += wheel_iter.next().unwrap();
         }
         None
     }
@@ -234,19 +226,20 @@ impl WheelSieveSegment {
                 .iter()
                 .filter(|&&p| p >= self.start as u64 && p < self.end as u64),
         );
-        let start = self.start;
-        primes.extend(
-            self.data
-                .into_iter()
-                .enumerate()
-                .filter_map(|(segment_p, x)| {
-                    if x {
-                        Some((segment_p + start) as u64)
-                    } else {
-                        None
-                    }
-                }),
-        );
+
+        let spoke = WheelSieveSegment::first_spoke(self.start);
+        let mut segment_spoke = spoke - self.start;
+        let mut wheel_iter = WHEEL_SPOKE_DIFFS
+            .iter()
+            .cycle()
+            .skip(SPOKE[spoke % WHEEL_SIZE]);
+        while segment_spoke < self.end - self.start {
+            if self.data[segment_spoke] {
+                primes.push((segment_spoke + self.start) as u64);
+            }
+            segment_spoke += wheel_iter.next().unwrap();
+        }
+
         primes
     }
 
