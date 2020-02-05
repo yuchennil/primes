@@ -132,14 +132,20 @@ struct WheelSieveSegment {
 const BASIS_PRIMES: [u64; 4] = [2, 3, 5, 7];
 const FIRST_NON_BASIS_PRIME: u64 = 11;
 const WHEEL_SIZE: usize = 210;
-const WHEEL_SPOKE_DIFFS: [usize; 210] = [
-    0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0,
-    6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 6, 0,
-    0, 0, 0, 0, 4, 0, 0, 0, 2, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0,
-    0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0,
-    4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 6, 0, 0, 0, 0, 0, 6, 0,
-    0, 0, 0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0,
-    2, 0, 4, 0, 0, 0, 2, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+const WHEEL_SPOKE_DIFFS: [usize; 48] = [
+    10, 2, 4, 2, 4, 6, 2, 6, 4, 2, 4, 6, 6, 2, 6, 4, 2, 6, 4, 6, 8, 4, 2, 4, 2, 4, 8, 6, 4, 6, 2,
+    4, 6, 2, 6, 6, 4, 2, 4, 6, 2, 6, 4, 2, 4, 2, 10, 2,
+];
+const SPOKE: [usize; 210] = [
+    0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7,
+    8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 13, 13, 13, 13,
+    13, 13, 14, 14, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 17, 17, 18, 18, 18, 18, 18, 18, 19, 19,
+    19, 19, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 23, 23, 24, 24,
+    24, 24, 25, 25, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 28, 29, 29,
+    29, 29, 30, 30, 30, 30, 30, 30, 31, 31, 32, 32, 32, 32, 33, 33, 33, 33, 33, 33, 34, 34, 35, 35,
+    35, 35, 35, 35, 36, 36, 36, 36, 36, 36, 37, 37, 37, 37, 38, 38, 39, 39, 39, 39, 40, 40, 40, 40,
+    40, 40, 41, 41, 42, 42, 42, 42, 42, 42, 43, 43, 43, 43, 44, 44, 45, 45, 45, 45, 46, 46, 47, 47,
+    47, 47, 47, 47, 47, 47, 47, 47,
 ];
 const CEILING_SPOKE: [usize; 210] = [
     1, 1, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 13, 13, 17, 17, 17, 17, 19, 19, 23, 23, 23, 23,
@@ -163,9 +169,13 @@ impl WheelSieveSegment {
         let mut data = vec![false; end - start];
 
         let mut spoke = WheelSieveSegment::first_spoke(start);
+        let mut wheel_iter = WHEEL_SPOKE_DIFFS
+            .iter()
+            .cycle()
+            .skip(SPOKE[spoke % WHEEL_SIZE]);
         while spoke < end {
             data[spoke - start] = true;
-            spoke = WheelSieveSegment::next_spoke(spoke);
+            spoke += wheel_iter.next().unwrap();
         }
 
         if start < 2 {
@@ -190,21 +200,26 @@ impl WheelSieveSegment {
             a / b + (a % b != 0) as usize
         }
         let mut factor = cmp::max(p, WheelSieveSegment::first_spoke(ceil_div(self.start, p)));
+        let mut wheel_iter = WHEEL_SPOKE_DIFFS
+            .iter()
+            .cycle()
+            .skip(SPOKE[factor % WHEEL_SIZE]);
         while p * factor < self.end {
             self.data[p * factor - self.start] = false;
-            factor = WheelSieveSegment::next_spoke(factor);
+            factor += wheel_iter.next().unwrap();
         }
     }
 
     /// Find the next prime after p in the sieve, or None
     fn next(&self, p: u64) -> Option<u64> {
         let mut p = p as usize;
-        p = WheelSieveSegment::next_spoke(p);
+        let mut wheel_iter = WHEEL_SPOKE_DIFFS.iter().cycle().skip(SPOKE[p % WHEEL_SIZE]);
+        p += wheel_iter.next().unwrap();
         while p < self.end {
             if self.data[p - self.start] {
                 return Some(p as u64);
             }
-            p = WheelSieveSegment::next_spoke(p);
+            p += wheel_iter.next().unwrap();
         }
         None
     }
@@ -237,9 +252,6 @@ impl WheelSieveSegment {
 
     fn first_spoke(start: usize) -> usize {
         (start / WHEEL_SIZE) * WHEEL_SIZE + CEILING_SPOKE[start % WHEEL_SIZE]
-    }
-    fn next_spoke(p: usize) -> usize {
-        p + WHEEL_SPOKE_DIFFS[p % WHEEL_SIZE]
     }
 }
 
