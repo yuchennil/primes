@@ -29,7 +29,7 @@ impl Sieve {
     /// all remaining segments (which hence don't need to be kept in memory after we've finished
     /// sieving through them).
     pub fn segmented(limit: u64) -> Sieve {
-        let segment_length = cmp::max(1, (limit as f64).sqrt().ceil() as u64);
+        let segment_length = (limit as f64).sqrt().ceil() as u64;
         let origin = SieveSegment::eratosthenes(segment_length);
         // TODO avoid cloning the origin segment
         let current_iter = origin.clone().into_iter();
@@ -72,11 +72,11 @@ struct SieveSegment {
 }
 
 impl SieveSegment {
-    /// Sieve an origin segment [0, limit) using Eratosthenes optimized by skipping evens after 2.
+    /// Sieve an origin segment [0, limit) using Eratosthenes, skipping non-wheel numbers.
     fn eratosthenes(limit: u64) -> SieveSegment {
         let mut sieve = WheelSieveSegment::create(0, limit);
 
-        let mut p = 3;
+        let mut p = FIRST_NON_BASIS_PRIME;
         while p * p <= limit {
             sieve.strike_prime(p);
             if let Some(next_p) = sieve.next(p) {
@@ -97,10 +97,11 @@ impl SieveSegment {
     fn from_origin(start: u64, end: u64, origin: &SieveSegment) -> SieveSegment {
         assert_eq!(0, origin.start);
         assert!(origin.end.pow(2) >= end);
+        assert!(start <= end, "start greater than end");
 
         let mut sieve = WheelSieveSegment::create(start, end);
-        // Don't sieve 2 if it exists.
-        for &p in origin.primes.iter().skip(1) {
+        // Don't sieve BASIS_PRIMES if they exist.
+        for &p in origin.primes.iter().skip(BASIS_PRIMES.len()) {
             sieve.strike_prime(p);
         }
 
@@ -124,90 +125,121 @@ impl IntoIterator for SieveSegment {
 #[derive(Debug)]
 struct WheelSieveSegment {
     data: Vec<bool>,
-    offset: usize,
-    start: u64,
-    end: u64,
+    start: usize,
+    end: usize,
 }
+
+const BASIS_PRIMES: [u64; 4] = [2, 3, 5, 7];
+const FIRST_NON_BASIS_PRIME: u64 = 11;
+const WHEEL_SIZE: usize = 210;
+const WHEEL_SPOKE_DIFFS: [usize; 210] = [
+    0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0,
+    6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 6, 0,
+    0, 0, 0, 0, 4, 0, 0, 0, 2, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0,
+    0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0,
+    4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 6, 0, 0, 0, 0, 0, 6, 0,
+    0, 0, 0, 0, 4, 0, 0, 0, 2, 0, 4, 0, 0, 0, 6, 0, 0, 0, 0, 0, 2, 0, 6, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+    2, 0, 4, 0, 0, 0, 2, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+];
+const CEILING_SPOKE: [usize; 210] = [
+    1, 1, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 13, 13, 17, 17, 17, 17, 19, 19, 23, 23, 23, 23,
+    29, 29, 29, 29, 29, 29, 31, 31, 37, 37, 37, 37, 37, 37, 41, 41, 41, 41, 43, 43, 47, 47, 47, 47,
+    53, 53, 53, 53, 53, 53, 59, 59, 59, 59, 59, 59, 61, 61, 67, 67, 67, 67, 67, 67, 71, 71, 71, 71,
+    73, 73, 79, 79, 79, 79, 79, 79, 83, 83, 83, 83, 89, 89, 89, 89, 89, 89, 97, 97, 97, 97, 97, 97,
+    97, 97, 101, 101, 101, 101, 103, 103, 107, 107, 107, 107, 109, 109, 113, 113, 113, 113, 121,
+    121, 121, 121, 121, 121, 121, 121, 127, 127, 127, 127, 127, 127, 131, 131, 131, 131, 137, 137,
+    137, 137, 137, 137, 139, 139, 143, 143, 143, 143, 149, 149, 149, 149, 149, 149, 151, 151, 157,
+    157, 157, 157, 157, 157, 163, 163, 163, 163, 163, 163, 167, 167, 167, 167, 169, 169, 173, 173,
+    173, 173, 179, 179, 179, 179, 179, 179, 181, 181, 187, 187, 187, 187, 187, 187, 191, 191, 191,
+    191, 193, 193, 197, 197, 197, 197, 199, 199, 209, 209, 209, 209, 209, 209, 209, 209, 209, 209,
+];
 
 impl WheelSieveSegment {
     // Create an unsieved WheelSieveSegment in [start, end).
     fn create(start: u64, end: u64) -> WheelSieveSegment {
-        // If start is even, then set sieve_offset to point at the first odd after it: start + 1.
-        // If start is odd, then adding 1 won't make a difference: u64_to_sieve(start + 1) will
-        // still point at start. Likewise with end.
-        let offset = WheelSieveSegment::u64_to_sieve(start + 1);
-        let size = WheelSieveSegment::u64_to_sieve(end + 1) - offset;
-        let mut data = vec![true; size];
-        if offset == 0 {
+        let start = start as usize;
+        let end = end as usize;
+
+        let mut data = vec![false; end - start];
+
+        let mut spoke = WheelSieveSegment::first_spoke(start);
+        while spoke < end {
+            data[spoke - start] = true;
+            spoke = WheelSieveSegment::next_spoke(spoke);
+        }
+
+        if start < 2 {
             // Strike 1 from the sieve if it's within bounds, as sieving wouldn't remove it.
-            if let Some(e) = data.get_mut(0) {
+            if let Some(e) = data.get_mut(1 - start) {
                 *e = false;
             }
         }
-        WheelSieveSegment {
-            data,
-            offset,
-            start,
-            end,
-        }
+        WheelSieveSegment { data, start, end }
     }
 
     // Strike multiples of prime in sieve.
     //
     // Optimize by starting the multiples search at the greater of
     // - p^2 (smaller multiples should already have been struck by previous primes)
-    // - the first odd multiple of p after start
+    // - the first wheel multiple of p after start
     //
     // Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
     fn strike_prime(&mut self, p: u64) {
-        /// Convenience functions to find u64 ceilings
-        fn ceil_div(numerator: u64, divisor: u64) -> u64 {
-            numerator / divisor + ((numerator % divisor) != 0) as u64
+        let p = p as usize;
+        fn ceil_div(a: usize, b: usize) -> usize {
+            a / b + (a % b != 0) as usize
         }
-        fn ceil_odd(n: u64) -> u64 {
-            n + (n + 1) % 2
-        }
-
-        let p_sieve_start =
-            WheelSieveSegment::u64_to_sieve(cmp::max(p * p, p * ceil_odd(ceil_div(self.start, p))))
-                - self.offset;
-        for multiple in (p_sieve_start..self.data.len()).step_by(p as usize) {
-            self.data[multiple] = false;
+        let mut factor = cmp::max(p, WheelSieveSegment::first_spoke(ceil_div(self.start, p)));
+        while p * factor < self.end {
+            self.data[p * factor - self.start] = false;
+            factor = WheelSieveSegment::next_spoke(factor);
         }
     }
 
     /// Find the next prime after p in the sieve, or None
     fn next(&self, p: u64) -> Option<u64> {
-        Some(WheelSieveSegment::sieve_to_u64(
-            (WheelSieveSegment::u64_to_sieve(p) + 1..self.data.len()).find(|&n| self.data[n])?,
-        ))
+        let mut p = p as usize;
+        p = WheelSieveSegment::next_spoke(p);
+        while p < self.end {
+            if self.data[p - self.start] {
+                return Some(p as u64);
+            }
+            p = WheelSieveSegment::next_spoke(p);
+        }
+        None
     }
 
     /// Consume this WheelSieveSegment to unpack primes
     fn unpack_primes(self) -> Vec<u64> {
         let mut primes = Vec::new();
-        // We've only sieved odd primes, so 2 will need to be manually prepended, if necessary.
-        if self.start <= 2 && self.end > 2 {
-            primes.push(2);
-        }
-        let offset = self.offset;
-        primes.extend(self.data.into_iter().enumerate().filter_map(|(p, x)| {
-            if x {
-                Some(WheelSieveSegment::sieve_to_u64(p + offset))
-            } else {
-                None
-            }
-        }));
+        // We've only sieved primes after BASIS_PRIMES, so these will need to be manually prepended,
+        // if necessary.
+        primes.extend(
+            BASIS_PRIMES
+                .iter()
+                .filter(|&&p| p >= self.start as u64 && p < self.end as u64),
+        );
+        let start = self.start;
+        primes.extend(
+            self.data
+                .into_iter()
+                .enumerate()
+                .filter_map(|(segment_p, x)| {
+                    if x {
+                        Some((segment_p + start) as u64)
+                    } else {
+                        None
+                    }
+                }),
+        );
         primes
     }
 
-    /// Convenience functions to convert between prime space (u64 numbers) and sieve space
-    /// (usizes corresponding to encoded odd u64s).
-    fn u64_to_sieve(prime: u64) -> usize {
-        ((prime - 1) / 2) as usize
+    fn first_spoke(start: usize) -> usize {
+        (start / WHEEL_SIZE) * WHEEL_SIZE + CEILING_SPOKE[start % WHEEL_SIZE]
     }
-    fn sieve_to_u64(sieve: usize) -> u64 {
-        2 * sieve as u64 + 1
+    fn next_spoke(p: usize) -> usize {
+        p + WHEEL_SPOKE_DIFFS[p % WHEEL_SIZE]
     }
 }
 
@@ -231,8 +263,20 @@ mod tests {
         assert_eq!(vec![2], Sieve::segmented(3).collect::<Vec<_>>());
         assert_eq!(vec![2, 3], Sieve::segmented(4).collect::<Vec<_>>());
         assert_eq!(
-            vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
-            Sieve::segmented(50).collect::<Vec<_>>()
+            vec![
+                2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
+                83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167,
+                173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257,
+                263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353,
+                359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449,
+                457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563,
+                569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653,
+                659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761,
+                769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877,
+                881, 883, 887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991,
+                997
+            ],
+            Sieve::segmented(1000).collect::<Vec<_>>()
         );
     }
 
@@ -263,64 +307,95 @@ mod tests {
         assert_eq!(4, sieve_segment.end);
         assert_eq!(vec![2, 3], sieve_segment.primes.to_vec());
 
-        let sieve_segment = SieveSegment::eratosthenes(50);
+        let sieve_segment = SieveSegment::eratosthenes(1000);
         assert_eq!(0, sieve_segment.start);
-        assert_eq!(50, sieve_segment.end);
+        assert_eq!(1000, sieve_segment.end);
         assert_eq!(
-            vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
+            vec![
+                2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
+                83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167,
+                173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257,
+                263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353,
+                359, 367, 373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449,
+                457, 461, 463, 467, 479, 487, 491, 499, 503, 509, 521, 523, 541, 547, 557, 563,
+                569, 571, 577, 587, 593, 599, 601, 607, 613, 617, 619, 631, 641, 643, 647, 653,
+                659, 661, 673, 677, 683, 691, 701, 709, 719, 727, 733, 739, 743, 751, 757, 761,
+                769, 773, 787, 797, 809, 811, 821, 823, 827, 829, 839, 853, 857, 859, 863, 877,
+                881, 883, 887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991,
+                997
+            ],
             sieve_segment.primes.to_vec()
         );
     }
 
     #[test]
     fn sieve_segment_from_origin() {
-        let origin = SieveSegment::eratosthenes(50);
+        let origin = SieveSegment::eratosthenes(200);
 
-        let sieve_segment = SieveSegment::from_origin(0, 50, &origin);
+        let sieve_segment = SieveSegment::from_origin(0, 200, &origin);
         assert_eq!(0, sieve_segment.start);
-        assert_eq!(50, sieve_segment.end);
+        assert_eq!(200, sieve_segment.end);
         assert_eq!(
-            vec![2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47],
+            vec![
+                2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
+                83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167,
+                173, 179, 181, 191, 193, 197, 199,
+            ],
             sieve_segment.primes.to_vec()
         );
 
-        let sieve_segment = SieveSegment::from_origin(50, 100, &origin);
-        assert_eq!(50, sieve_segment.start);
-        assert_eq!(100, sieve_segment.end);
+        let sieve_segment = SieveSegment::from_origin(200, 400, &origin);
+        assert_eq!(200, sieve_segment.start);
+        assert_eq!(400, sieve_segment.end);
         assert_eq!(
-            vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
+            vec![
+                211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
+                307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
+            ],
             sieve_segment.primes.to_vec()
         );
 
-        let sieve_segment = SieveSegment::from_origin(53, 100, &origin);
-        assert_eq!(53, sieve_segment.start);
-        assert_eq!(100, sieve_segment.end);
+        let sieve_segment = SieveSegment::from_origin(211, 400, &origin);
+        assert_eq!(211, sieve_segment.start);
+        assert_eq!(400, sieve_segment.end);
         assert_eq!(
-            vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
+            vec![
+                211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
+                307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
+            ],
             sieve_segment.primes.to_vec()
         );
 
-        let sieve_segment = SieveSegment::from_origin(54, 100, &origin);
-        assert_eq!(54, sieve_segment.start);
-        assert_eq!(100, sieve_segment.end);
+        let sieve_segment = SieveSegment::from_origin(212, 400, &origin);
+        assert_eq!(212, sieve_segment.start);
+        assert_eq!(400, sieve_segment.end);
         assert_eq!(
-            vec![59, 61, 67, 71, 73, 79, 83, 89, 97],
+            vec![
+                223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307,
+                311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
+            ],
             sieve_segment.primes.to_vec()
         );
 
-        let sieve_segment = SieveSegment::from_origin(50, 97, &origin);
-        assert_eq!(50, sieve_segment.start);
-        assert_eq!(97, sieve_segment.end);
+        let sieve_segment = SieveSegment::from_origin(200, 397, &origin);
+        assert_eq!(200, sieve_segment.start);
+        assert_eq!(397, sieve_segment.end);
         assert_eq!(
-            vec![53, 59, 61, 67, 71, 73, 79, 83, 89],
+            vec![
+                211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
+                307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389
+            ],
             sieve_segment.primes.to_vec()
         );
 
-        let sieve_segment = SieveSegment::from_origin(50, 98, &origin);
-        assert_eq!(50, sieve_segment.start);
-        assert_eq!(98, sieve_segment.end);
+        let sieve_segment = SieveSegment::from_origin(200, 398, &origin);
+        assert_eq!(200, sieve_segment.start);
+        assert_eq!(398, sieve_segment.end);
         assert_eq!(
-            vec![53, 59, 61, 67, 71, 73, 79, 83, 89, 97],
+            vec![
+                211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
+                307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
+            ],
             sieve_segment.primes.to_vec()
         );
     }
