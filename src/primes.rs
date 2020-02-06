@@ -1,5 +1,6 @@
 /// Library for utilities related to primes
 use std::cmp;
+use std::ops;
 
 /// Euclidean algorithm
 pub fn gcd(a: u64, b: u64) -> u64 {
@@ -75,7 +76,6 @@ impl SieveSegment {
     /// Sieve an origin segment [0, limit) using Eratosthenes, skipping non-wheel numbers.
     fn eratosthenes(limit: u64) -> SieveSegment {
         let mut sieve = WheelSieveSegment::create(0, limit);
-
         let mut p = FIRST_NON_BASIS_PRIME;
         while p * p <= limit {
             sieve.strike_prime(p);
@@ -124,7 +124,7 @@ impl IntoIterator for SieveSegment {
 
 #[derive(Debug)]
 struct WheelSieveSegment {
-    data: Vec<bool>,
+    data: WheelSieveData,
     start: usize,
     end: usize,
 }
@@ -132,6 +132,12 @@ struct WheelSieveSegment {
 const BASIS_PRIMES: [u64; 4] = [2, 3, 5, 7];
 const FIRST_NON_BASIS_PRIME: u64 = 11;
 const WHEEL_SIZE: usize = 210;
+const WHEEL_SPOKE_SIZE: usize = 48;
+const WHEEL: [usize; 48] = [
+    1, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101,
+    103, 107, 109, 113, 121, 127, 131, 137, 139, 143, 149, 151, 157, 163, 167, 169, 173, 179, 181,
+    187, 191, 193, 197, 199, 209,
+];
 const WHEEL_SPOKE_DIFFS: [usize; 48] = [
     10, 2, 4, 2, 4, 6, 2, 6, 4, 2, 4, 6, 6, 2, 6, 4, 2, 6, 4, 6, 8, 4, 2, 4, 2, 4, 8, 6, 4, 6, 2,
     4, 6, 2, 6, 6, 4, 2, 4, 6, 2, 6, 4, 2, 4, 2, 10, 2,
@@ -166,13 +172,12 @@ impl WheelSieveSegment {
         let start = start as usize;
         let end = end as usize;
 
-        let mut data = vec![true; end - start];
-        if start < 2 {
+        let mut data = WheelSieveData::create(start, end);
+        if start < 2 && end >= 2 {
             // Strike 1 from the sieve if it's within bounds, as sieving wouldn't remove it.
-            if let Some(e) = data.get_mut(1 - start) {
-                *e = false;
-            }
+            data[1] = false;
         }
+
         WheelSieveSegment { data, start, end }
     }
 
@@ -184,67 +189,112 @@ impl WheelSieveSegment {
     //
     // Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
     fn strike_prime(&mut self, p: u64) {
-        let p = p as usize;
+        fn first_spoke(start: usize) -> usize {
+            (start / WHEEL_SIZE) * WHEEL_SIZE + CEILING_SPOKE[start % WHEEL_SIZE]
+        }
         fn ceil_div(a: usize, b: usize) -> usize {
             a / b + (a % b != 0) as usize
         }
-        let factor = cmp::max(p, WheelSieveSegment::first_spoke(ceil_div(self.start, p)));
-        let mut segment_multiple = p * factor - self.start;
+
+        let p = p as usize;
+        let factor = cmp::max(p, first_spoke(ceil_div(self.start, p)));
+
+        let mut multiple = p * factor;
         let mut wheel_iter = WHEEL_SPOKE_DIFFS
             .iter()
             .map(|&spoke| p * spoke)
             .cycle()
             .skip(SPOKE[factor % WHEEL_SIZE]);
-        while segment_multiple < self.end - self.start {
-            self.data[segment_multiple] = false;
-            segment_multiple += wheel_iter.next().unwrap();
+        while multiple < self.end {
+            self.data[multiple] = false;
+            multiple += wheel_iter.next().unwrap();
         }
     }
 
     /// Find the next prime after p in the sieve, or None
     fn next(&self, p: u64) -> Option<u64> {
-        let p = p as usize;
-        let mut segment_p = p - self.start;
-        let mut wheel_iter = WHEEL_SPOKE_DIFFS.iter().cycle().skip(SPOKE[p % WHEEL_SIZE]);
-        segment_p += wheel_iter.next().unwrap();
-        while segment_p < self.end - self.start {
-            if self.data[segment_p] {
-                return Some((segment_p + self.start) as u64);
-            }
-            segment_p += wheel_iter.next().unwrap();
-        }
-        None
+        Some(self.data.next(p as usize)? as u64)
     }
 
     /// Consume this WheelSieveSegment to unpack primes
     fn unpack_primes(self) -> Vec<u64> {
         let mut primes = Vec::new();
-        // We've only sieved primes after BASIS_PRIMES, so these will need to be manually prepended,
-        // if necessary.
+        // We've only sieved primes after BASIS_PRIMES, so these will need to be manually prepended.
         primes.extend(
             BASIS_PRIMES
                 .iter()
                 .filter(|&&p| p >= self.start as u64 && p < self.end as u64),
         );
-
-        let spoke = WheelSieveSegment::first_spoke(self.start);
-        let mut segment_spoke = spoke - self.start;
-        let mut wheel_iter = WHEEL_SPOKE_DIFFS
-            .iter()
-            .cycle()
-            .skip(SPOKE[spoke % WHEEL_SIZE]);
-        while segment_spoke < self.end - self.start {
-            if self.data[segment_spoke] {
-                primes.push((segment_spoke + self.start) as u64);
+        primes.extend(self.data.enumerate().filter_map(|(p, is_prime)| {
+            if is_prime {
+                Some(p as u64)
+            } else {
+                None
             }
-            segment_spoke += wheel_iter.next().unwrap();
-        }
+        }));
 
         primes
     }
+}
 
-    fn first_spoke(start: usize) -> usize {
-        (start / WHEEL_SIZE) * WHEEL_SIZE + CEILING_SPOKE[start % WHEEL_SIZE]
+#[derive(Debug)]
+struct WheelSieveData {
+    data: Vec<bool>,
+    data_start: usize,
+    data_end: usize,
+}
+
+impl WheelSieveData {
+    fn create(start: usize, end: usize) -> WheelSieveData {
+        let data_start = WheelSieveData::n_to_data(start);
+        let data_end = WheelSieveData::n_to_data(end);
+        let data = vec![true; data_end - data_start];
+
+        WheelSieveData {
+            data,
+            data_start,
+            data_end,
+        }
+    }
+
+    fn next(&self, p: usize) -> Option<usize> {
+        Some(WheelSieveData::data_to_n(
+            self.data[p..]
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find(|(_data_next_p, &is_prime)| is_prime)?
+                .0
+                + WheelSieveData::n_to_data(p),
+        ))
+    }
+
+    fn enumerate(&self) -> impl Iterator<Item = (usize, bool)> + '_ {
+        let index_iter = (self.data_start..).map(WheelSieveData::data_to_n);
+        index_iter.zip(self.data.iter().cloned())
+    }
+
+    fn n_to_data(n: usize) -> usize {
+        n / WHEEL_SIZE * WHEEL_SPOKE_SIZE + SPOKE[n % WHEEL_SIZE]
+    }
+    fn data_to_n(data: usize) -> usize {
+        data / WHEEL_SPOKE_SIZE * WHEEL_SIZE + WHEEL[data % WHEEL_SPOKE_SIZE]
+    }
+}
+
+impl ops::Index<usize> for WheelSieveData {
+    type Output = bool;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        let data_index = WheelSieveData::n_to_data(index) - self.data_start;
+        &self.data[data_index]
+    }
+}
+
+impl ops::IndexMut<usize> for WheelSieveData {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let data_index = WheelSieveData::n_to_data(index) - self.data_start;
+        &mut self.data[data_index]
     }
 }
 
