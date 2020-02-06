@@ -140,18 +140,6 @@ const SPOKE: [usize; 210] = [
     40, 40, 41, 41, 42, 42, 42, 42, 42, 42, 43, 43, 43, 43, 44, 44, 45, 45, 45, 45, 46, 46, 47, 47,
     47, 47, 47, 47, 47, 47, 47, 47,
 ];
-const CEILING_SPOKE: [usize; 210] = [
-    1, 1, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 13, 13, 17, 17, 17, 17, 19, 19, 23, 23, 23, 23,
-    29, 29, 29, 29, 29, 29, 31, 31, 37, 37, 37, 37, 37, 37, 41, 41, 41, 41, 43, 43, 47, 47, 47, 47,
-    53, 53, 53, 53, 53, 53, 59, 59, 59, 59, 59, 59, 61, 61, 67, 67, 67, 67, 67, 67, 71, 71, 71, 71,
-    73, 73, 79, 79, 79, 79, 79, 79, 83, 83, 83, 83, 89, 89, 89, 89, 89, 89, 97, 97, 97, 97, 97, 97,
-    97, 97, 101, 101, 101, 101, 103, 103, 107, 107, 107, 107, 109, 109, 113, 113, 113, 113, 121,
-    121, 121, 121, 121, 121, 121, 121, 127, 127, 127, 127, 127, 127, 131, 131, 131, 131, 137, 137,
-    137, 137, 137, 137, 139, 139, 143, 143, 143, 143, 149, 149, 149, 149, 149, 149, 151, 151, 157,
-    157, 157, 157, 157, 157, 163, 163, 163, 163, 163, 163, 167, 167, 167, 167, 169, 169, 173, 173,
-    173, 173, 179, 179, 179, 179, 179, 179, 181, 181, 187, 187, 187, 187, 187, 187, 191, 191, 191,
-    191, 193, 193, 197, 197, 197, 197, 199, 199, 209, 209, 209, 209, 209, 209, 209, 209, 209, 209,
-];
 
 impl WheelSieveSegment {
     // Create an unsieved WheelSieveSegment in [start, end).
@@ -177,7 +165,7 @@ impl WheelSieveSegment {
     // Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
     fn strike_prime(&mut self, p: u64) {
         fn first_spoke(start: usize) -> usize {
-            (start / WHEEL_SIZE) * WHEEL_SIZE + CEILING_SPOKE[start % WHEEL_SIZE]
+            (start / WHEEL_SIZE) * WHEEL_SIZE + WHEEL[SPOKE[start % WHEEL_SIZE]]
         }
         fn ceil_div(a: usize, b: usize) -> usize {
             a / b + (a % b != 0) as usize
@@ -229,10 +217,7 @@ impl WheelSieveData {
         let data_end = WheelSieveData::n_to_data(end);
         let data = BitVec::create(data_end - data_start, true);
 
-        WheelSieveData {
-            data,
-            data_start,
-        }
+        WheelSieveData { data, data_start }
     }
 
     fn next(&self, p: usize) -> Option<usize> {
@@ -243,7 +228,9 @@ impl WheelSieveData {
     }
 
     fn collect(&self) -> impl Iterator<Item = usize> + '_ {
-        self.data.collect().map(move |n| WheelSieveData::data_to_n(n + self.data_start))
+        self.data
+            .collect()
+            .map(move |n| WheelSieveData::data_to_n(n + self.data_start))
     }
 
     fn n_to_data(n: usize) -> usize {
