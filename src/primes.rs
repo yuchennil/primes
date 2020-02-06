@@ -1,6 +1,5 @@
 /// Library for utilities related to primes
 use std::cmp;
-use std::ops;
 
 /// Euclidean algorithm
 pub fn gcd(a: u64, b: u64) -> u64 {
@@ -163,7 +162,7 @@ impl WheelSieveSegment {
         let mut data = WheelSieveData::create(start, end);
         if start < 2 && end >= 2 {
             // Strike 1 from the sieve if it's within bounds, as sieving wouldn't remove it.
-            data[1] = false;
+            data.set(1, false);
         }
 
         WheelSieveSegment { data, start, end }
@@ -194,7 +193,7 @@ impl WheelSieveSegment {
             .cycle()
             .skip(SPOKE[factor % WHEEL_SIZE]);
         while multiple < self.end {
-            self.data[multiple] = false;
+            self.data.set(multiple, false);
             multiple += wheel_iter.next().unwrap();
         }
     }
@@ -205,22 +204,13 @@ impl WheelSieveSegment {
     }
 
     /// Consume this WheelSieveSegment to collect primes
-    fn collect_primes(self) -> Vec<u64> {
+    fn collect_primes(&self) -> Vec<u64> {
         // We've only sieved primes after BASIS_PRIMES, so these will need to be manually prepended.
         let basis_primes_iter = BASIS_PRIMES
             .iter()
             .filter(|&&p| p >= self.start as u64 && p < self.end as u64)
             .cloned();
-        let wheel_primes_iter =
-            self.data.enumerate().filter_map(
-                |(p, is_prime)| {
-                    if is_prime {
-                        Some(p as u64)
-                    } else {
-                        None
-                    }
-                },
-            );
+        let wheel_primes_iter = self.data.collect().map(|p| p as u64);
 
         basis_primes_iter
             .chain(wheel_primes_iter)
@@ -228,41 +218,32 @@ impl WheelSieveSegment {
     }
 }
 
-#[derive(Clone)]
 struct WheelSieveData {
-    data: Vec<bool>,
+    data: BitVec,
     data_start: usize,
-    data_end: usize,
 }
 
 impl WheelSieveData {
     fn create(start: usize, end: usize) -> WheelSieveData {
         let data_start = WheelSieveData::n_to_data(start);
         let data_end = WheelSieveData::n_to_data(end);
-        let data = vec![true; data_end - data_start];
+        let data = BitVec::create(data_end - data_start, true);
 
         WheelSieveData {
             data,
             data_start,
-            data_end,
         }
     }
 
     fn next(&self, p: usize) -> Option<usize> {
+        let data_index = WheelSieveData::n_to_data(p) - self.data_start;
         Some(WheelSieveData::data_to_n(
-            self.data[p..]
-                .iter()
-                .enumerate()
-                .skip(1)
-                .find(|(_data_next_p, &is_prime)| is_prime)?
-                .0
-                + WheelSieveData::n_to_data(p),
+            self.data.find(data_index + 1)? + self.data_start,
         ))
     }
 
-    fn enumerate(&self) -> impl Iterator<Item = (usize, bool)> + '_ {
-        let index_iter = (self.data_start..).map(WheelSieveData::data_to_n);
-        index_iter.zip(self.data.iter().cloned())
+    fn collect(&self) -> impl Iterator<Item = usize> + '_ {
+        self.data.collect().map(move |n| WheelSieveData::data_to_n(n + self.data_start))
     }
 
     fn n_to_data(n: usize) -> usize {
@@ -271,21 +252,78 @@ impl WheelSieveData {
     fn data_to_n(data: usize) -> usize {
         data / WHEEL_SPOKE_SIZE * WHEEL_SIZE + WHEEL[data % WHEEL_SPOKE_SIZE]
     }
-}
 
-impl ops::Index<usize> for WheelSieveData {
-    type Output = bool;
-
-    fn index(&self, index: usize) -> &Self::Output {
+    fn set(&mut self, index: usize, value: bool) {
         let data_index = WheelSieveData::n_to_data(index) - self.data_start;
-        &self.data[data_index]
+        self.data.set(data_index, value);
     }
 }
 
-impl ops::IndexMut<usize> for WheelSieveData {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        let data_index = WheelSieveData::n_to_data(index) - self.data_start;
-        &mut self.data[data_index]
+struct BitVec {
+    data: Vec<u8>,
+    size: usize,
+}
+
+const BITS: usize = 8;
+const ONES: u8 = std::u8::MAX;
+
+impl BitVec {
+    fn create(size: usize, value: bool) -> BitVec {
+        fn ceil_div(a: usize, b: usize) -> usize {
+            a / b + (a % b != 0) as usize
+        }
+
+        let data = vec![if value { ONES } else { 0 }; ceil_div(size, BITS)];
+
+        BitVec { data, size }
+    }
+
+    fn get(&self, index: usize) -> bool {
+        assert!(index < self.size);
+        self.data[index / BITS] & (1 << (index % BITS)) as u8 != 0
+    }
+
+    fn set(&mut self, index: usize, value: bool) {
+        assert!(index < self.size);
+        if value {
+            self.data[index / BITS] |= (1 << (index % BITS)) as u8;
+        } else {
+            self.data[index / BITS] &= ONES ^ (1 << (index % BITS)) as u8;
+        }
+    }
+
+    fn find(&self, index: usize) -> Option<usize> {
+        for i in index..self.size {
+            if self.get(i) {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn collect(&self) -> BitIter {
+        BitIter::create(self)
+    }
+}
+
+struct BitIter<'a> {
+    bit_vec: &'a BitVec,
+    index: usize,
+}
+
+impl BitIter<'_> {
+    fn create(bit_vec: &BitVec) -> BitIter {
+        BitIter { bit_vec, index: 0 }
+    }
+}
+
+impl Iterator for BitIter<'_> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.bit_vec.find(self.index)?;
+        self.index = result + 1;
+        Some(result)
     }
 }
 
