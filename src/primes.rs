@@ -14,7 +14,6 @@ pub fn gcd(a: u64, b: u64) -> u64 {
     a
 }
 
-#[derive(Debug)]
 pub struct Sieve {
     origin: SieveSegment,
     current_iter: std::vec::IntoIter<u64>,
@@ -65,11 +64,9 @@ impl Iterator for Sieve {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct SieveSegment {
     primes: Vec<u64>,
-    start: u64,
-    end: u64,
 }
 
 impl SieveSegment {
@@ -87,18 +84,12 @@ impl SieveSegment {
         }
 
         SieveSegment {
-            primes: sieve.unpack_primes(),
-            start: 0,
-            end: limit,
+            primes: sieve.collect_primes(),
         }
     }
 
     /// Sieve a segment [start, end) based on an origin segment.
     fn from_origin(start: u64, end: u64, origin: &SieveSegment) -> SieveSegment {
-        assert_eq!(0, origin.start);
-        assert!(origin.end.pow(2) >= end);
-        assert!(start <= end, "start greater than end");
-
         let mut sieve = WheelSieveSegment::create(start, end);
         // Don't sieve BASIS_PRIMES if they exist.
         for &p in origin.primes.iter().skip(BASIS_PRIMES.len()) {
@@ -106,9 +97,7 @@ impl SieveSegment {
         }
 
         SieveSegment {
-            primes: sieve.unpack_primes(),
-            start,
-            end,
+            primes: sieve.collect_primes(),
         }
     }
 }
@@ -122,7 +111,6 @@ impl IntoIterator for SieveSegment {
     }
 }
 
-#[derive(Debug)]
 struct WheelSieveSegment {
     data: WheelSieveData,
     start: usize,
@@ -216,28 +204,31 @@ impl WheelSieveSegment {
         Some(self.data.next(p as usize)? as u64)
     }
 
-    /// Consume this WheelSieveSegment to unpack primes
-    fn unpack_primes(self) -> Vec<u64> {
-        let mut primes = Vec::new();
+    /// Consume this WheelSieveSegment to collect primes
+    fn collect_primes(self) -> Vec<u64> {
         // We've only sieved primes after BASIS_PRIMES, so these will need to be manually prepended.
-        primes.extend(
-            BASIS_PRIMES
-                .iter()
-                .filter(|&&p| p >= self.start as u64 && p < self.end as u64),
-        );
-        primes.extend(self.data.enumerate().filter_map(|(p, is_prime)| {
-            if is_prime {
-                Some(p as u64)
-            } else {
-                None
-            }
-        }));
+        let basis_primes_iter = BASIS_PRIMES
+            .iter()
+            .filter(|&&p| p >= self.start as u64 && p < self.end as u64)
+            .cloned();
+        let wheel_primes_iter =
+            self.data.enumerate().filter_map(
+                |(p, is_prime)| {
+                    if is_prime {
+                        Some(p as u64)
+                    } else {
+                        None
+                    }
+                },
+            );
 
-        primes
+        basis_primes_iter
+            .chain(wheel_primes_iter)
+            .collect::<Vec<_>>()
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 struct WheelSieveData {
     data: Vec<bool>,
     data_start: usize,
@@ -338,33 +329,21 @@ mod tests {
     #[test]
     fn sieve_segment_eratosthenes() {
         let sieve_segment = SieveSegment::eratosthenes(0);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(0, sieve_segment.end);
-        assert_eq!(vec![0; 0], sieve_segment.primes.to_vec());
+        assert_eq!(vec![0; 0], sieve_segment.into_iter().collect::<Vec<_>>());
 
         let sieve_segment = SieveSegment::eratosthenes(1);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(1, sieve_segment.end);
-        assert_eq!(vec![0; 0], sieve_segment.primes.to_vec());
+        assert_eq!(vec![0; 0], sieve_segment.into_iter().collect::<Vec<_>>());
 
         let sieve_segment = SieveSegment::eratosthenes(2);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(2, sieve_segment.end);
-        assert_eq!(vec![0; 0], sieve_segment.primes.to_vec());
+        assert_eq!(vec![0; 0], sieve_segment.into_iter().collect::<Vec<_>>());
 
         let sieve_segment = SieveSegment::eratosthenes(3);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(3, sieve_segment.end);
-        assert_eq!(vec![2], sieve_segment.primes.to_vec());
+        assert_eq!(vec![2], sieve_segment.into_iter().collect::<Vec<_>>());
 
         let sieve_segment = SieveSegment::eratosthenes(4);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(4, sieve_segment.end);
-        assert_eq!(vec![2, 3], sieve_segment.primes.to_vec());
+        assert_eq!(vec![2, 3], sieve_segment.into_iter().collect::<Vec<_>>());
 
         let sieve_segment = SieveSegment::eratosthenes(1000);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(1000, sieve_segment.end);
         assert_eq!(
             vec![
                 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
@@ -379,7 +358,7 @@ mod tests {
                 881, 883, 887, 907, 911, 919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991,
                 997
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
     }
 
@@ -388,70 +367,58 @@ mod tests {
         let origin = SieveSegment::eratosthenes(200);
 
         let sieve_segment = SieveSegment::from_origin(0, 200, &origin);
-        assert_eq!(0, sieve_segment.start);
-        assert_eq!(200, sieve_segment.end);
         assert_eq!(
             vec![
                 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
                 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167,
                 173, 179, 181, 191, 193, 197, 199,
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
 
         let sieve_segment = SieveSegment::from_origin(200, 400, &origin);
-        assert_eq!(200, sieve_segment.start);
-        assert_eq!(400, sieve_segment.end);
         assert_eq!(
             vec![
                 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
                 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
 
         let sieve_segment = SieveSegment::from_origin(211, 400, &origin);
-        assert_eq!(211, sieve_segment.start);
-        assert_eq!(400, sieve_segment.end);
         assert_eq!(
             vec![
                 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
                 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
 
         let sieve_segment = SieveSegment::from_origin(212, 400, &origin);
-        assert_eq!(212, sieve_segment.start);
-        assert_eq!(400, sieve_segment.end);
         assert_eq!(
             vec![
                 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307,
                 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
 
         let sieve_segment = SieveSegment::from_origin(200, 397, &origin);
-        assert_eq!(200, sieve_segment.start);
-        assert_eq!(397, sieve_segment.end);
         assert_eq!(
             vec![
                 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
                 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
 
         let sieve_segment = SieveSegment::from_origin(200, 398, &origin);
-        assert_eq!(200, sieve_segment.start);
-        assert_eq!(398, sieve_segment.end);
         assert_eq!(
             vec![
                 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293,
                 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397
             ],
-            sieve_segment.primes.to_vec()
+            sieve_segment.into_iter().collect::<Vec<_>>()
         );
     }
 }
