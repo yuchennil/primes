@@ -334,7 +334,7 @@ impl Wheel {
 }
 
 struct SieveSegment {
-    sieve: Vec<bool>,
+    sieve: BitVec,
     sieve_segment_start: usize,
     sieve_segment_length: usize,
 }
@@ -343,7 +343,7 @@ impl SieveSegment {
     /// Create an unsieved SieveSegment in [start, end).
     fn new(segment_start: usize, segment_end: usize) -> SieveSegment {
         let mut sieve_segment = SieveSegment {
-            sieve: Vec::new(),
+            sieve: BitVec::trues(0),
             sieve_segment_start: 0,
             sieve_segment_length: 0,
         };
@@ -355,7 +355,7 @@ impl SieveSegment {
     fn reset(&mut self, segment_start: usize, segment_end: usize) {
         self.sieve_segment_start = SieveSegment::n_to_sieve_segment_start(segment_start);
         self.sieve_segment_length = self.n_to_sieve(segment_end);
-        self.sieve = vec![true; self.sieve_segment_length];
+        self.sieve.reset(self.sieve_segment_length);
     }
 
     /// Strike multiples of prime in sieve.
@@ -366,7 +366,7 @@ impl SieveSegment {
     fn strike_prime_and_get_next_multiple(&mut self, p: usize, multiple: usize) -> usize {
         let mut sieve_segment_multiple = self.n_to_sieve(multiple);
         while sieve_segment_multiple < self.sieve_segment_length {
-            self.sieve[sieve_segment_multiple] = false;
+            self.sieve.unset(sieve_segment_multiple);
             sieve_segment_multiple += p;
         }
         self.sieve_to_n(sieve_segment_multiple)
@@ -375,7 +375,7 @@ impl SieveSegment {
     /// Find the next prime at or after n in the sieve.
     fn find_prime(&self, n: usize) -> Option<usize> {
         for sieve_segment_n in self.n_to_sieve(n)..self.sieve_segment_length {
-            if self.sieve[sieve_segment_n] {
+            if self.sieve.get(sieve_segment_n) {
                 let p = self.sieve_to_n(sieve_segment_n);
                 return Some(p);
             }
@@ -402,6 +402,50 @@ impl SieveSegment {
     }
     fn sieve_to_n(&self, sieve_n: usize) -> usize {
         SieveSegment::sieve_segment_start_to_n(sieve_n + self.sieve_segment_start)
+    }
+}
+
+struct BitVec {
+    bits: Vec<usize>,
+    len: usize,
+}
+
+impl BitVec {
+    const SHIFT: usize = 6;
+    const MASK: usize = 0b111111;
+
+    pub fn trues(len: usize) -> BitVec {
+        let bit_fill = 0;
+        let bit_len = (len >> BitVec::SHIFT) + (len & BitVec::MASK != 0) as usize;
+        let bits = vec![bit_fill; bit_len];
+        BitVec { bits, len }
+    }
+
+    pub fn reset(&mut self, len: usize) {
+        let bit_fill = 0;
+        let bit_len = len;
+        self.bits = vec![bit_fill; bit_len];
+        self.len = bit_len;
+    }
+
+    pub fn get(&self, index: usize) -> bool {
+        assert!(
+            index < self.len,
+            "index out of bounds: the len is {} but the index is {}",
+            self.len,
+            index
+        );
+        self.bits[index >> BitVec::SHIFT] & (1 << (index & BitVec::MASK)) == 0
+    }
+
+    pub fn unset(&mut self, index: usize) {
+        assert!(
+            index < self.len,
+            "index out of bounds: the len is {} but the index is {}",
+            self.len,
+            index
+        );
+        self.bits[index >> BitVec::SHIFT] |= 1 << (index & BitVec::MASK)
     }
 }
 
@@ -492,9 +536,62 @@ mod tests {
         assert_eq!(9, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(9)));
     }
 
+    #[test]
+    fn bit_vec_correct() {
+        let mut bit_vec = BitVec::trues(12);
+        bit_vec.unset(2);
+        bit_vec.unset(3);
+        bit_vec.unset(5);
+        bit_vec.unset(7);
+        bit_vec.unset(11);
+        assert_eq!(true, bit_vec.get(0));
+        assert_eq!(true, bit_vec.get(1));
+        assert_eq!(false, bit_vec.get(2));
+        assert_eq!(false, bit_vec.get(3));
+        assert_eq!(true, bit_vec.get(4));
+        assert_eq!(false, bit_vec.get(5));
+        assert_eq!(true, bit_vec.get(6));
+        assert_eq!(false, bit_vec.get(7));
+        assert_eq!(true, bit_vec.get(8));
+        assert_eq!(true, bit_vec.get(9));
+        assert_eq!(true, bit_vec.get(10));
+        assert_eq!(false, bit_vec.get(11));
+        bit_vec.reset(12);
+        assert_eq!(true, bit_vec.get(0));
+        assert_eq!(true, bit_vec.get(1));
+        assert_eq!(true, bit_vec.get(2));
+        assert_eq!(true, bit_vec.get(3));
+        assert_eq!(true, bit_vec.get(4));
+        assert_eq!(true, bit_vec.get(5));
+        assert_eq!(true, bit_vec.get(6));
+        assert_eq!(true, bit_vec.get(7));
+        assert_eq!(true, bit_vec.get(8));
+        assert_eq!(true, bit_vec.get(9));
+        assert_eq!(true, bit_vec.get(10));
+        assert_eq!(true, bit_vec.get(11));
+    }
+
+    #[test]
+    #[should_panic]
+    fn bit_vec_get_length_check() {
+        let bit_vec = BitVec::trues(12);
+        bit_vec.get(12);
+    }
+
+    #[test]
+    #[should_panic]
+    fn bit_vec_set_length_check() {
+        let mut bit_vec = BitVec::trues(12);
+        bit_vec.unset(12);
+    }
+
     #[bench]
     fn enumerate_primes(b: &mut test::Bencher) {
-        b.iter(|| for _ in Sieve::segmented(1_000_000) { continue; })
+        b.iter(|| {
+            for _ in Sieve::segmented(1_000_000) {
+                continue;
+            }
+        })
     }
 
     #[bench]
