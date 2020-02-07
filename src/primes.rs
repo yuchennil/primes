@@ -413,16 +413,17 @@ struct BitVec {
 impl BitVec {
     const SHIFT: usize = 6;
     const MASK: usize = 0b111111;
+    const ONES: usize = std::usize::MAX;
 
     pub fn trues(len: usize) -> BitVec {
-        let bit_fill = 0;
+        let bit_fill = BitVec::ONES;
         let bit_len = (len >> BitVec::SHIFT) + (len & BitVec::MASK != 0) as usize;
         let bits = vec![bit_fill; bit_len];
         BitVec { bits, len }
     }
 
     pub fn reset(&mut self, len: usize) {
-        let bit_fill = 0;
+        let bit_fill = BitVec::ONES;
         let bit_len = len;
         self.bits = vec![bit_fill; bit_len];
         self.len = bit_len;
@@ -435,7 +436,7 @@ impl BitVec {
             self.len,
             index
         );
-        self.bits[index >> BitVec::SHIFT] & (1 << (index & BitVec::MASK)) == 0
+        self.bits[index >> BitVec::SHIFT] & (1 << (index & BitVec::MASK)) != 0
     }
 
     pub fn unset(&mut self, index: usize) {
@@ -445,7 +446,7 @@ impl BitVec {
             self.len,
             index
         );
-        self.bits[index >> BitVec::SHIFT] |= 1 << (index & BitVec::MASK)
+        self.bits[index >> BitVec::SHIFT] &= !(1 << (index & BitVec::MASK))
     }
 }
 
