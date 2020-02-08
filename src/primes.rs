@@ -128,6 +128,7 @@ mod tests {
         assert_eq!(vec![0; 0], Sieve::segmented(2).collect::<Vec<_>>());
         assert_eq!(vec![2], Sieve::segmented(3).collect::<Vec<_>>());
         assert_eq!(vec![2, 3], Sieve::segmented(4).collect::<Vec<_>>());
+        assert_eq!(vec![2, 3, 5, 7], Sieve::segmented(9).collect::<Vec<_>>());
         assert_eq!(
             vec![
                 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
