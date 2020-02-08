@@ -14,7 +14,7 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 }
 
 pub struct Sieve {
-    sieve: Vec<bool>,
+    sieve: SieveSegment,
     origin_primes: Vec<usize>,
     multiples: Vec<usize>,
     limit: usize,
@@ -37,7 +37,7 @@ impl Sieve {
         let segment_end = segment_length;
         let n = 2;
 
-        let sieve = vec![true; Sieve::n_to_sieve(segment_end)];
+        let sieve = SieveSegment::new(segment_start, segment_end);
         let origin_primes = Vec::new();
         let multiples = Vec::new();
 
@@ -57,39 +57,25 @@ impl Sieve {
     }
 
     fn sieve_origin(&mut self) {
-        let sieve_segment_end = Sieve::n_to_sieve(self.segment_end);
-        for sieve_n in Sieve::n_to_sieve(3)..sieve_segment_end {
-            if self.sieve[sieve_n] {
-                let p = Sieve::sieve_to_n(sieve_n);
-                self.origin_primes.push(p);
-                self.multiples.push(p * p);
-                for sieve_multiple in (Sieve::n_to_sieve(p * p)..sieve_segment_end).step_by(p) {
-                    self.sieve[sieve_multiple] = false;
+        let mut n = 3;
+        while n < self.segment_end {
+            match self.sieve.find_prime(&mut n) {
+                Some(p) => {
+                    self.origin_primes.push(p);
+                    let mut multiple = p * p;
+                    self.multiples.push(multiple);
+                    self.sieve.strike_prime(p, &mut multiple);
                 }
-            }
+                None => break,
+            };
         }
     }
 
     fn sieve_segment(&mut self) {
-        let sieve_segment_start = Sieve::n_to_sieve(self.segment_start);
-        let sieve_segment_end = Sieve::n_to_sieve(self.segment_end);
-        let sieve_segment_length = sieve_segment_end - sieve_segment_start;
-        self.sieve = vec![true; sieve_segment_length];
-        for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
-            let mut sieve_segment_multiple = Sieve::n_to_sieve(*multiple) - sieve_segment_start;
-            while sieve_segment_multiple < sieve_segment_length {
-                self.sieve[sieve_segment_multiple] = false;
-                sieve_segment_multiple += p;
-            }
-            *multiple = Sieve::sieve_to_n(sieve_segment_multiple + sieve_segment_start);
+        self.sieve.reset(self.segment_start, self.segment_end);
+        for (&p, mut multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
+            self.sieve.strike_prime(p, &mut multiple);
         }
-    }
-
-    fn n_to_sieve(n: usize) -> usize {
-        n / 2
-    }
-    fn sieve_to_n(sieve_n: usize) -> usize {
-        2 * sieve_n + 1
     }
 }
 
@@ -103,18 +89,9 @@ impl Iterator for Sieve {
             return Some(result);
         }
         loop {
-            let sieve_segment_start = Sieve::n_to_sieve(self.segment_start);
-            let sieve_segment_length = Sieve::n_to_sieve(self.segment_end) - sieve_segment_start;
-            let mut sieve_segment_n = Sieve::n_to_sieve(self.n) - sieve_segment_start;
-            while sieve_segment_n < sieve_segment_length {
-                if self.sieve[sieve_segment_n] {
-                    let p = Sieve::sieve_to_n(sieve_segment_n + sieve_segment_start) as u64;
-                    self.n = Sieve::sieve_to_n(sieve_segment_n + sieve_segment_start + 1);
-                    return Some(p);
-                }
-                sieve_segment_n += 1;
+            if let Some(p) = self.sieve.find_prime(&mut self.n) {
+                return Some(p as u64);
             }
-            self.n = Sieve::sieve_to_n(sieve_segment_n + sieve_segment_start);
             if self.segment_end == self.limit {
                 return None;
             }
@@ -122,6 +99,62 @@ impl Iterator for Sieve {
             self.segment_end = cmp::min(self.segment_start + self.segment_length, self.limit);
             self.sieve_segment();
         }
+    }
+}
+
+struct SieveSegment {
+    sieve: Vec<bool>,
+    sieve_segment_start: usize,
+    sieve_segment_length: usize,
+}
+
+impl SieveSegment {
+    fn new(segment_start: usize, segment_end: usize) -> SieveSegment {
+        let mut sieve_segment = SieveSegment {
+            sieve: Vec::new(),
+            sieve_segment_start: 0,
+            sieve_segment_length: 0,
+        };
+        sieve_segment.reset(segment_start, segment_end);
+        sieve_segment
+    }
+
+    fn reset(&mut self, segment_start: usize, segment_end: usize) {
+        self.sieve_segment_start = SieveSegment::n_to_sieve(segment_start);
+        self.sieve_segment_length =
+            SieveSegment::n_to_sieve(segment_end) - self.sieve_segment_start;
+        self.sieve = vec![true; self.sieve_segment_length];
+    }
+
+    fn strike_prime(&mut self, p: usize, multiple: &mut usize) {
+        let mut sieve_segment_multiple =
+            SieveSegment::n_to_sieve(*multiple) - self.sieve_segment_start;
+        while sieve_segment_multiple < self.sieve_segment_length {
+            self.sieve[sieve_segment_multiple] = false;
+            sieve_segment_multiple += p;
+        }
+        *multiple = SieveSegment::sieve_to_n(sieve_segment_multiple + self.sieve_segment_start);
+    }
+
+    fn find_prime(&self, n: &mut usize) -> Option<usize> {
+        let mut sieve_segment_n = SieveSegment::n_to_sieve(*n) - self.sieve_segment_start;
+        while sieve_segment_n < self.sieve_segment_length {
+            if self.sieve[sieve_segment_n] {
+                let p = SieveSegment::sieve_to_n(sieve_segment_n + self.sieve_segment_start);
+                *n = p + 2;
+                return Some(p);
+            }
+            sieve_segment_n += 1;
+        }
+        *n = SieveSegment::sieve_to_n(sieve_segment_n + self.sieve_segment_start);
+        None
+    }
+
+    fn n_to_sieve(n: usize) -> usize {
+        n / 2
+    }
+    fn sieve_to_n(sieve_n: usize) -> usize {
+        2 * sieve_n + 1
     }
 }
 
@@ -138,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn sieve_segmented() {
+    fn sieve_segmented_correct() {
         assert_eq!(vec![0; 0], Sieve::segmented(0).collect::<Vec<_>>());
         assert_eq!(vec![0; 0], Sieve::segmented(1).collect::<Vec<_>>());
         assert_eq!(vec![0; 0], Sieve::segmented(2).collect::<Vec<_>>());
