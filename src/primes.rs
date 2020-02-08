@@ -37,7 +37,7 @@ impl Sieve {
         let segment_end = segment_length;
         let n = 2;
 
-        let sieve = vec![true; segment_length];
+        let sieve = vec![true; Sieve::n_to_sieve(segment_end)];
         let origin_primes = Vec::new();
         let multiples = Vec::new();
 
@@ -57,27 +57,39 @@ impl Sieve {
     }
 
     fn sieve_origin(&mut self) {
-        for p in (3..self.segment_length).step_by(2) {
-            if self.sieve[p] {
+        let sieve_segment_end = Sieve::n_to_sieve(self.segment_end);
+        for sieve_n in Sieve::n_to_sieve(3)..sieve_segment_end {
+            if self.sieve[sieve_n] {
+                let p = Sieve::sieve_to_n(sieve_n);
                 self.origin_primes.push(p);
                 self.multiples.push(p * p);
-                for multiple in (p * p..self.segment_length).step_by(2 * p) {
-                    self.sieve[multiple] = false;
+                for sieve_multiple in (Sieve::n_to_sieve(p * p)..sieve_segment_end).step_by(p) {
+                    self.sieve[sieve_multiple] = false;
                 }
             }
         }
     }
 
     fn sieve_segment(&mut self) {
-        self.sieve = vec![true; self.segment_length];
-        for (&prime, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
-            let mut segment_multiple = *multiple - self.segment_start;
-            while segment_multiple < self.segment_length {
-                self.sieve[segment_multiple] = false;
-                segment_multiple += 2 * prime;
+        let sieve_segment_start = Sieve::n_to_sieve(self.segment_start);
+        let sieve_segment_end = Sieve::n_to_sieve(self.segment_end);
+        let sieve_segment_length = sieve_segment_end - sieve_segment_start;
+        self.sieve = vec![true; sieve_segment_length];
+        for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
+            let mut sieve_segment_multiple = Sieve::n_to_sieve(*multiple) - sieve_segment_start;
+            while sieve_segment_multiple < sieve_segment_length {
+                self.sieve[sieve_segment_multiple] = false;
+                sieve_segment_multiple += p;
             }
-            *multiple = segment_multiple + self.segment_start;
+            *multiple = Sieve::sieve_to_n(sieve_segment_multiple + sieve_segment_start);
         }
+    }
+
+    fn n_to_sieve(n: usize) -> usize {
+        n / 2
+    }
+    fn sieve_to_n(sieve_n: usize) -> usize {
+        2 * sieve_n + 1
     }
 }
 
@@ -91,14 +103,18 @@ impl Iterator for Sieve {
             return Some(result);
         }
         loop {
-            while self.n < self.segment_end {
-                if self.sieve[self.n - self.segment_start] {
-                    let result = self.n as u64;
-                    self.n += 2;
-                    return Some(result);
+            let sieve_segment_start = Sieve::n_to_sieve(self.segment_start);
+            let sieve_segment_length = Sieve::n_to_sieve(self.segment_end) - sieve_segment_start;
+            let mut sieve_segment_n = Sieve::n_to_sieve(self.n) - sieve_segment_start;
+            while sieve_segment_n < sieve_segment_length {
+                if self.sieve[sieve_segment_n] {
+                    let p = Sieve::sieve_to_n(sieve_segment_n + sieve_segment_start) as u64;
+                    self.n = Sieve::sieve_to_n(sieve_segment_n + sieve_segment_start + 1);
+                    return Some(p);
                 }
-                self.n += 2;
+                sieve_segment_n += 1;
             }
+            self.n = Sieve::sieve_to_n(sieve_segment_n + sieve_segment_start);
             if self.segment_end == self.limit {
                 return None;
             }
