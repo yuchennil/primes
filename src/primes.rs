@@ -96,6 +96,7 @@ impl Iterator for Sieve {
         }
         // Now iterate through wheel primes
         loop {
+            // Search for and possibly return the next wheel prime
             match self.sieve.find_prime(self.n) {
                 (next_n, Some(p)) => {
                     self.n = next_n;
@@ -103,10 +104,13 @@ impl Iterator for Sieve {
                 }
                 (next_n, None) => self.n = next_n,
             }
+
+            // Check if this was the last segment
             if self.segment_end == self.limit {
                 return None;
             }
 
+            // Sieve the next segment and try again
             let segment_length = self.segment_end - self.segment_start;
             self.segment_start = self.segment_end;
             self.segment_end = cmp::min(self.segment_start + segment_length, self.limit);
@@ -141,8 +145,9 @@ impl SieveSegment {
         self.sieve = vec![true; self.sieve_segment_length];
     }
 
-    /// Strike multiples of prime in sieve. Return the next multiple past the end of this
-    /// SieveSegment.
+    /// Strike multiples of prime in sieve.
+    ///
+    /// Return the next multiple past the end of this SieveSegment.
     ///
     /// Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
     fn strike_prime(&mut self, p: usize, multiple: usize) -> usize {
@@ -155,7 +160,9 @@ impl SieveSegment {
         SieveSegment::sieve_to_n(sieve_segment_multiple + self.sieve_segment_start)
     }
 
-    /// Find the next prime at or after n in the sieve. Also return one n past the next prime.
+    /// Find the next prime at or after n in the sieve.
+    ///
+    /// Also return the next candidate n.
     fn find_prime(&self, n: usize) -> (usize, Option<usize>) {
         let mut sieve_segment_n = SieveSegment::n_to_sieve(n) - self.sieve_segment_start;
         while sieve_segment_n < self.sieve_segment_length {
