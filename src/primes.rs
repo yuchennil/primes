@@ -343,7 +343,7 @@ impl SieveSegment {
     /// Create an unsieved SieveSegment in [start, end).
     fn new(segment_start: usize, segment_end: usize) -> SieveSegment {
         let mut sieve_segment = SieveSegment {
-            sieve: BitVec::trues(0),
+            sieve: BitVec::new(),
             sieve_segment_start: 0,
             sieve_segment_length: 0,
         };
@@ -405,48 +405,27 @@ impl SieveSegment {
     }
 }
 
-struct BitVec {
-    bits: Vec<usize>,
-    len: usize,
-}
+struct BitVec(Vec<usize>);
 
 impl BitVec {
     const SHIFT: usize = 6;
-    const MASK: usize = 0b111111;
+    const MASK: usize = 0b11_1111;
     const ONES: usize = std::usize::MAX;
 
-    pub fn trues(len: usize) -> BitVec {
-        let bit_fill = BitVec::ONES;
-        let bit_len = (len >> BitVec::SHIFT) + (len & BitVec::MASK != 0) as usize;
-        let bits = vec![bit_fill; bit_len];
-        BitVec { bits, len }
+    pub fn new() -> BitVec {
+        BitVec(Vec::new())
     }
 
     pub fn reset(&mut self, len: usize) {
-        let bit_fill = BitVec::ONES;
-        let bit_len = len;
-        self.bits = vec![bit_fill; bit_len];
-        self.len = bit_len;
+        self.0 = vec![BitVec::ONES; len];
     }
 
     pub fn get(&self, index: usize) -> bool {
-        assert!(
-            index < self.len,
-            "index out of bounds: the len is {} but the index is {}",
-            self.len,
-            index
-        );
-        self.bits[index >> BitVec::SHIFT] & (1 << (index & BitVec::MASK)) != 0
+        self.0[index >> BitVec::SHIFT] & (1 << (index & BitVec::MASK)) != 0
     }
 
     pub fn unset(&mut self, index: usize) {
-        assert!(
-            index < self.len,
-            "index out of bounds: the len is {} but the index is {}",
-            self.len,
-            index
-        );
-        self.bits[index >> BitVec::SHIFT] &= !(1 << (index & BitVec::MASK))
+        self.0[index >> BitVec::SHIFT] &= !(1 << (index & BitVec::MASK))
     }
 }
 
@@ -539,7 +518,9 @@ mod tests {
 
     #[test]
     fn bit_vec_correct() {
-        let mut bit_vec = BitVec::trues(12);
+        let mut bit_vec = BitVec::new();
+        bit_vec.reset(12);
+
         bit_vec.unset(2);
         bit_vec.unset(3);
         bit_vec.unset(5);
@@ -557,6 +538,7 @@ mod tests {
         assert_eq!(true, bit_vec.get(9));
         assert_eq!(true, bit_vec.get(10));
         assert_eq!(false, bit_vec.get(11));
+
         bit_vec.reset(12);
         assert_eq!(true, bit_vec.get(0));
         assert_eq!(true, bit_vec.get(1));
@@ -570,20 +552,6 @@ mod tests {
         assert_eq!(true, bit_vec.get(9));
         assert_eq!(true, bit_vec.get(10));
         assert_eq!(true, bit_vec.get(11));
-    }
-
-    #[test]
-    #[should_panic]
-    fn bit_vec_get_length_check() {
-        let bit_vec = BitVec::trues(12);
-        bit_vec.get(12);
-    }
-
-    #[test]
-    #[should_panic]
-    fn bit_vec_set_length_check() {
-        let mut bit_vec = BitVec::trues(12);
-        bit_vec.unset(12);
     }
 
     #[bench]
