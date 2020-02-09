@@ -18,7 +18,6 @@ pub struct Sieve {
     origin_primes: Vec<usize>,
     multiples: Vec<usize>,
     limit: usize,
-    segment_length: usize,
     segment_start: usize,
     segment_end: usize,
     n: usize,
@@ -27,14 +26,13 @@ pub struct Sieve {
 impl Sieve {
     /// Run a segmented Sieve of Eratosthenes to save memory while generating primes.
     ///
-    /// segment_length is just above sqrt(limit) so that the origin segment suffices to sieve
+    /// segment length is just above sqrt(limit) so that the origin segment suffices to sieve
     /// all remaining segments (which hence don't need to be kept in memory after we've finished
     /// sieving through them).
     pub fn segmented(limit: u64) -> Sieve {
         let limit = limit as usize;
-        let segment_length = (limit as f64).sqrt().ceil() as usize;
         let segment_start = 0;
-        let segment_end = segment_length;
+        let segment_end = (limit as f64).sqrt().ceil() as usize;
         let n = 2;
 
         let sieve = SieveSegment::new(segment_start, segment_end);
@@ -46,7 +44,6 @@ impl Sieve {
             origin_primes,
             multiples,
             limit,
-            segment_length,
             segment_start,
             segment_end,
             n,
@@ -109,8 +106,10 @@ impl Iterator for Sieve {
             if self.segment_end == self.limit {
                 return None;
             }
-            self.segment_start += self.segment_length;
-            self.segment_end = cmp::min(self.segment_start + self.segment_length, self.limit);
+
+            let segment_length = self.segment_end - self.segment_start;
+            self.segment_start = self.segment_end;
+            self.segment_end = cmp::min(self.segment_start + segment_length, self.limit);
             self.sieve_segment();
         }
     }
