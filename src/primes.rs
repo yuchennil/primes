@@ -405,12 +405,12 @@ impl SieveSegment {
     }
 }
 
-struct BitVec(Vec<usize>);
+struct BitVec(Vec<u8>);
 
 impl BitVec {
-    const SHIFT: usize = 6;
-    const MASK: usize = 0b11_1111;
-    const ONES: usize = std::usize::MAX;
+    const SHIFT: usize = 3;
+    const MASK: usize = 0b111;
+    const ONES: u8 = std::u8::MAX;
 
     pub fn new() -> BitVec {
         BitVec(Vec::new())
