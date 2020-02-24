@@ -30,10 +30,18 @@ impl Sieve {
     /// all remaining segments (which hence don't need to be kept in memory after we've finished
     /// sieving through them).
     pub fn segmented(limit: u64) -> Sieve {
-        let limit = limit as usize;
+        Sieve::range(0, limit)
+    }
+
+    pub fn range(start: u64, end: u64) -> Sieve {
+        let limit = end as usize;
         let segment_start = 0;
         let segment_end = (limit as f64).sqrt().ceil() as usize;
-        let n = 2;
+        let n = if start <= 2 {
+            2
+        } else {
+            Sieve::ceil_odd(start as usize)
+        };
 
         let sieve = SieveSegment::new(segment_start, segment_end);
         let origin_primes = Vec::new();
@@ -48,9 +56,40 @@ impl Sieve {
             segment_end,
             n,
         };
+        sieve.segment_start = start as usize;
         sieve.sieve_origin();
+        sieve.segment_end += sieve.segment_start;
         sieve.sieve_segment();
         sieve
+    }
+
+    pub fn is_prime(&self, n: u64) -> bool {
+        let n = n as usize;
+        assert!(
+            n < self.limit,
+            "n = {} not less than sieve.limit = {}",
+            n,
+            self.limit
+        );
+        match n {
+            1 => return false,
+            2 => return true,
+            n if n % 2 == 0 => return false,
+            _ => {
+                for &prime in &self.origin_primes {
+                    if n == prime {
+                        return true;
+                    }
+                    if n % prime == 0 {
+                        return false;
+                    }
+                    if prime * prime > n {
+                        break;
+                    }
+                }
+            }
+        }
+        true
     }
 
     /// Sieve an origin segment [0, limit) using Eratosthenes, skipping non-wheel numbers.
@@ -63,9 +102,11 @@ impl Sieve {
             match self.sieve.find_prime(n) {
                 (next_n, Some(p)) => {
                     n = next_n;
+                    let factor =
+                        cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(self.segment_start, p)));
                     self.origin_primes.push(p);
-                    self.multiples.push(p * p);
-                    self.sieve.strike_prime(p, p * p);
+                    self.multiples.push(p * factor);
+                    self.sieve.strike_prime(p, p * factor);
                 }
                 (_, None) => break,
             };
@@ -81,6 +122,15 @@ impl Sieve {
         for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
             *multiple = self.sieve.strike_prime(p, *multiple);
         }
+    }
+
+    // Return the first odd number at least as large as n
+    fn ceil_odd(n: usize) -> usize {
+        SieveSegment::sieve_to_n(SieveSegment::n_to_sieve(n))
+    }
+    // Return the dividend a / b, rounded up
+    fn ceil_div(a: usize, b: usize) -> usize {
+        a / b + (a % b != 0) as usize
     }
 }
 
@@ -229,6 +279,47 @@ mod tests {
             ],
             Sieve::segmented(1000).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn sieve_range_correct() {
+        assert_eq!(vec![2, 3, 5, 7], Sieve::range(0, 10).collect::<Vec<_>>());
+        assert_eq!(vec![2, 3, 5, 7], Sieve::range(1, 11).collect::<Vec<_>>());
+        assert_eq!(
+            vec![2, 3, 5, 7, 11],
+            Sieve::range(2, 12).collect::<Vec<_>>()
+        );
+        assert_eq!(vec![3, 5, 7, 11], Sieve::range(3, 13).collect::<Vec<_>>());
+        assert_eq!(vec![5, 7, 11, 13], Sieve::range(4, 14).collect::<Vec<_>>());
+        assert_eq!(vec![83, 89, 97], Sieve::range(80, 100).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn is_prime_correct() {
+        let sieve = Sieve::segmented(16);
+        assert_eq!(false, sieve.is_prime(0));
+        assert_eq!(false, sieve.is_prime(1));
+        assert_eq!(true, sieve.is_prime(2));
+        assert_eq!(true, sieve.is_prime(3));
+        assert_eq!(false, sieve.is_prime(4));
+        assert_eq!(true, sieve.is_prime(5));
+        assert_eq!(false, sieve.is_prime(6));
+        assert_eq!(true, sieve.is_prime(7));
+        assert_eq!(false, sieve.is_prime(8));
+        assert_eq!(false, sieve.is_prime(9));
+        assert_eq!(false, sieve.is_prime(10));
+        assert_eq!(true, sieve.is_prime(11));
+        assert_eq!(false, sieve.is_prime(12));
+        assert_eq!(true, sieve.is_prime(13));
+        assert_eq!(false, sieve.is_prime(14));
+        assert_eq!(false, sieve.is_prime(15));
+    }
+
+    #[test]
+    #[should_panic]
+    fn is_prime_limit_check() {
+        let sieve = Sieve::segmented(16);
+        sieve.is_prime(16);
     }
 
     #[test]
