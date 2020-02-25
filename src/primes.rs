@@ -63,35 +63,6 @@ impl Sieve {
         sieve
     }
 
-    pub fn is_prime(&self, n: u64) -> bool {
-        let n = n as usize;
-        assert!(
-            n < self.limit,
-            "n = {} not less than sieve.limit = {}",
-            n,
-            self.limit
-        );
-        match n {
-            1 => return false,
-            2 => return true,
-            n if n % 2 == 0 => return false,
-            _ => {
-                for &prime in &self.origin_primes {
-                    if n == prime {
-                        return true;
-                    }
-                    if n % prime == 0 {
-                        return false;
-                    }
-                    if prime * prime > n {
-                        break;
-                    }
-                }
-            }
-        }
-        true
-    }
-
     /// Sieve an origin segment [0, limit) using Eratosthenes, skipping non-wheel numbers.
     ///
     /// Optimize by starting the multiples search at p^2 (smaller multiples should already have been
@@ -292,34 +263,6 @@ mod tests {
         assert_eq!(vec![3, 5, 7, 11], Sieve::range(3, 13).collect::<Vec<_>>());
         assert_eq!(vec![5, 7, 11, 13], Sieve::range(4, 14).collect::<Vec<_>>());
         assert_eq!(vec![83, 89, 97], Sieve::range(80, 100).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn is_prime_correct() {
-        let sieve = Sieve::segmented(16);
-        assert_eq!(false, sieve.is_prime(0));
-        assert_eq!(false, sieve.is_prime(1));
-        assert_eq!(true, sieve.is_prime(2));
-        assert_eq!(true, sieve.is_prime(3));
-        assert_eq!(false, sieve.is_prime(4));
-        assert_eq!(true, sieve.is_prime(5));
-        assert_eq!(false, sieve.is_prime(6));
-        assert_eq!(true, sieve.is_prime(7));
-        assert_eq!(false, sieve.is_prime(8));
-        assert_eq!(false, sieve.is_prime(9));
-        assert_eq!(false, sieve.is_prime(10));
-        assert_eq!(true, sieve.is_prime(11));
-        assert_eq!(false, sieve.is_prime(12));
-        assert_eq!(true, sieve.is_prime(13));
-        assert_eq!(false, sieve.is_prime(14));
-        assert_eq!(false, sieve.is_prime(15));
-    }
-
-    #[test]
-    #[should_panic]
-    fn is_prime_limit_check() {
-        let sieve = Sieve::segmented(16);
-        sieve.is_prime(16);
     }
 
     #[test]
