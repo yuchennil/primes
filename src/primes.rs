@@ -14,7 +14,7 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 }
 
 pub struct Sieve {
-    sieve: SieveSegment,
+    segment: SieveSegment,
     origin_primes: Vec<usize>,
     multiples: Vec<usize>,
     limit: usize,
@@ -43,12 +43,12 @@ impl Sieve {
             Sieve::ceil_odd(start as usize)
         };
 
-        let sieve = SieveSegment::new(segment_start, segment_end);
+        let segment = SieveSegment::new(segment_start, segment_end);
         let origin_primes = Vec::new();
         let multiples = Vec::new();
 
         let mut sieve = Sieve {
-            sieve,
+            segment,
             origin_primes,
             multiples,
             limit,
@@ -70,14 +70,14 @@ impl Sieve {
     fn sieve_origin(&mut self) {
         let mut n = 3;
         while n < self.segment_end {
-            match self.sieve.find_prime_and_next_n(n) {
+            match self.segment.find_prime_and_next_n(n) {
                 (Some(p), next_n) => {
                     n = next_n;
                     let factor =
                         cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(self.segment_start, p)));
                     self.origin_primes.push(p);
                     self.multiples.push(p * factor);
-                    self.sieve.strike_prime_and_get_next_multiple(p, p * factor);
+                    self.segment.strike_prime_and_get_next_multiple(p, p * factor);
                 }
                 (None, _) => break,
             };
@@ -89,9 +89,9 @@ impl Sieve {
     /// Optimize by starting the multiples search at the first wheel multiple of p after start,
     /// which should already be set in multiples
     fn sieve_segment(&mut self) {
-        self.sieve.reset(self.segment_start, self.segment_end);
+        self.segment.reset(self.segment_start, self.segment_end);
         for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
-            *multiple = self.sieve.strike_prime_and_get_next_multiple(p, *multiple);
+            *multiple = self.segment.strike_prime_and_get_next_multiple(p, *multiple);
         }
     }
 
@@ -118,7 +118,7 @@ impl Iterator for Sieve {
         // Now iterate through wheel primes
         loop {
             // Search for and possibly return the next wheel prime
-            match self.sieve.find_prime_and_next_n(self.n) {
+            match self.segment.find_prime_and_next_n(self.n) {
                 (Some(p), next_n) => {
                     self.n = next_n;
                     return Some(p as u64);
