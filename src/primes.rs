@@ -24,6 +24,8 @@ pub struct Sieve {
 }
 
 impl Sieve {
+    const WHEEL_BASIS_PRIME: usize = 2;
+    const FIRST_NON_BASIS_PRIME: usize = 3;
     /// Run a segmented Sieve of Eratosthenes to save memory while generating primes.
     ///
     /// segment length is just above sqrt(limit) so that the origin segment suffices to sieve
@@ -37,8 +39,8 @@ impl Sieve {
         let limit = end as usize;
         let segment_start = 0;
         let segment_end = (limit as f64).sqrt().ceil() as usize;
-        let n = if start <= 2 {
-            2
+        let n = if start as usize <= Sieve::WHEEL_BASIS_PRIME {
+            Sieve::WHEEL_BASIS_PRIME
         } else {
             Sieve::ceil_odd(start as usize)
         };
@@ -68,7 +70,7 @@ impl Sieve {
     /// Optimize by starting the multiples search at p^2 (smaller multiples should already have been
     /// struck by previous primes)
     fn sieve_origin(&mut self) {
-        let mut n = 3;
+        let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while n < self.segment_end {
             match self.segment.find_prime_and_next_n(n) {
                 (Some(p), next_n) => {
@@ -109,11 +111,11 @@ impl Iterator for Sieve {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Wheel basis primes aren't included in the sieve output
-        if self.n == 2 && self.limit > 2 {
-            let result = self.n as u64;
-            self.n = 3;
-            return Some(result);
+        // Wheel basis primes aren't included in the wheel sieve's output. We have to
+        // check for them manually.
+        if self.n == Sieve::WHEEL_BASIS_PRIME && self.limit > Sieve::WHEEL_BASIS_PRIME {
+            self.n = Sieve::FIRST_NON_BASIS_PRIME;
+            return Some(Sieve::WHEEL_BASIS_PRIME as u64);
         }
         // Now iterate through wheel primes
         loop {
