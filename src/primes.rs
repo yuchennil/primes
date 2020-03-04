@@ -408,6 +408,7 @@ impl SieveSegment {
 struct BitVec(Vec<u8>);
 
 impl BitVec {
+    const BOOL_BITS: usize = 8;
     const SHIFT: usize = 3;
     const MASK: usize = 0b111;
     const ONES: u8 = std::u8::MAX;
@@ -417,7 +418,7 @@ impl BitVec {
     }
 
     pub fn reset(&mut self, len: usize) {
-        self.0 = vec![BitVec::ONES; len];
+        self.0 = vec![BitVec::ONES; Wheel::ceil_div(len, BitVec::BOOL_BITS)];
     }
 
     pub fn get(&self, index: usize) -> bool {
