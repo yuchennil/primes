@@ -13,6 +13,34 @@ pub fn gcd(a: u64, b: u64) -> u64 {
     a
 }
 
+/// {2}-wheel segmented sieve of Eratosthenes to generate all primes below a given limit
+///
+/// The naive sieve of Eratosthenes strikes multiples of a given prime from a fixed array. The
+/// first unstruck number in the array is then the next smallest prime, and we repeat this process
+/// until we've consumed all primes in the array.
+///
+/// The naive sieve requires keeping the entire array in memory, with frequent cache misses due to
+/// striding through the whole array once for each prime. By contrast, a segmented Sieve reduces
+/// memory use and improves locality by partitioning numbers below limit into contiguous segments.
+/// Once we've processed a segment, its memory can be freed and reused. Moreover, if a segment fits
+/// in a CPU's L1/L2/L3 cache, then we can strike all primes within it without extra memory loads.
+///
+/// A {2, 3, ..., p_k}-wheel sieve further optimizes memory by skipping multiples of the
+/// small primes 2, 3, ..., p_k. The only prime candidates we need to consider will be coprime
+/// to these small primes, saving us 1/2 strikes for a {2}-wheel, 4/6 strikes for a {2, 3}-wheel,
+/// etc.
+///
+/// Usage:
+///
+///     use primes::primes::Sieve;
+///
+///     assert_eq!(vec![2, 3, 5, 7, 11, 13, 17, 19], Sieve::segmented(20).collect::<Vec<_>>());
+///     assert_eq!(vec![83, 89, 97], Sieve::range(80, 100).collect::<Vec<_>>());
+///
+/// Algorithm primarily based on Jonathon Sorenson's 1990 "An Introduction to Prime Number Sieves":
+/// - https://minds.wisconsin.edu/handle/1793/59248
+/// Modern CPU + RAM optimizations due to Kim Walisch's primesieve:
+/// - https://github.com/kimwalisch/primesieve/wiki/Segmented-sieve-of-Eratosthenes
 pub struct Sieve {
     segment: SieveSegment,
     origin_primes: Vec<usize>,
@@ -26,11 +54,7 @@ pub struct Sieve {
 impl Sieve {
     const WHEEL_BASIS_PRIME: usize = 2;
     const FIRST_NON_BASIS_PRIME: usize = 3;
-    /// Run a segmented Sieve of Eratosthenes to save memory while generating primes.
-    ///
-    /// segment length is just above sqrt(limit) so that the origin segment suffices to sieve
-    /// all remaining segments (which hence don't need to be kept in memory after we've finished
-    /// sieving through them).
+
     pub fn segmented(limit: u64) -> Sieve {
         Sieve::range(0, limit)
     }
@@ -38,6 +62,9 @@ impl Sieve {
     pub fn range(start: u64, end: u64) -> Sieve {
         let limit = end as usize;
         let segment_start = 0;
+        // segment length is just above sqrt(limit) so that the origin segment suffices to sieve
+        // all remaining segments (which hence don't need to be kept in memory after we've finished
+        // sieving through them).
         let segment_end = (limit as f64).sqrt().ceil() as usize;
         let n = if start as usize <= Sieve::WHEEL_BASIS_PRIME {
             Sieve::WHEEL_BASIS_PRIME
@@ -66,15 +93,15 @@ impl Sieve {
     }
 
     /// Sieve an origin segment [0, limit) using Eratosthenes, skipping non-wheel numbers.
-    ///
-    /// Optimize by starting the multiples search at p^2 (smaller multiples should already have been
-    /// struck by previous primes)
     fn sieve_origin(&mut self) {
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while n < self.segment_end {
             match self.segment.find_prime_and_next_n(n) {
                 (Some(p), next_n) => {
                     n = next_n;
+                    // Optimize by starting the multiples search at p^2 (smaller multiples should
+                    // already have been struck by previous primes), or the first wheel multiple
+                    // within the first segment, whichever is larger.
                     let factor =
                         cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(self.segment_start, p)));
                     self.origin_primes.push(p);
@@ -87,11 +114,10 @@ impl Sieve {
     }
 
     /// Sieve a segment [start, end) based on an origin segment.
-    ///
-    /// Optimize by starting the multiples search at the first wheel multiple of p after start,
-    /// which should already be set in multiples
     fn sieve_segment(&mut self) {
         self.segment.reset(self.segment_start, self.segment_end);
+        // Optimize by starting the multiples search at the first wheel multiple of p after start.
+        // This should already be set in self.multiples
         for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
             *multiple = self.segment.strike_prime_and_get_next_multiple(p, *multiple);
         }
