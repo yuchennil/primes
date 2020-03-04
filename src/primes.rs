@@ -42,13 +42,13 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 /// Modern CPU + RAM optimizations due to Kim Walisch's primesieve:
 /// - https://github.com/kimwalisch/primesieve/wiki/Segmented-sieve-of-Eratosthenes
 pub struct Sieve {
-    segment: SieveSegment,
-    origin_primes: Vec<usize>,
-    multiples: Vec<usize>,
     limit: usize,
     segment_start: usize,
     segment_end: usize,
     n: usize,
+    segment: SieveSegment,
+    origin_primes: Vec<usize>,
+    multiples: Vec<usize>,
 }
 
 impl Sieve {
@@ -61,57 +61,57 @@ impl Sieve {
 
     pub fn range(start: u64, end: u64) -> Sieve {
         let limit = end as usize;
-        let segment_start = 0;
-        // segment length is just above sqrt(limit) so that the origin segment suffices to sieve
+        // segment_length is just above sqrt(limit) so that the origin segment suffices to sieve
         // all remaining segments (which hence don't need to be kept in memory after we've finished
         // sieving through them).
-        let segment_end = (limit as f64).sqrt().ceil() as usize;
-        let n = if start as usize <= Sieve::WHEEL_BASIS_PRIME {
+        let segment_length = (limit as f64).sqrt().ceil() as usize;
+        let segment_start = start as usize;
+        let segment_end = cmp::min(segment_start + segment_length, limit);
+        let n = if segment_start <= Sieve::WHEEL_BASIS_PRIME {
             Sieve::WHEEL_BASIS_PRIME
         } else {
-            Sieve::ceil_odd(start as usize)
+            Sieve::ceil_odd(segment_start)
         };
 
         let segment = SieveSegment::new(segment_start, segment_end);
-        let origin_primes = Vec::new();
-        let multiples = Vec::new();
+        let (origin_primes, multiples) = Sieve::sieve_origin(segment_length, segment_start);
 
         let mut sieve = Sieve {
-            segment,
-            origin_primes,
-            multiples,
             limit,
             segment_start,
             segment_end,
             n,
+            segment,
+            origin_primes,
+            multiples,
         };
-        sieve.segment_start = start as usize;
-        sieve.sieve_origin();
-        sieve.segment_end += sieve.segment_start;
         sieve.sieve_segment();
         sieve
     }
 
-    /// Sieve an origin segment [0, limit) using Eratosthenes, skipping non-wheel numbers.
-    fn sieve_origin(&mut self) {
+    /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
+    fn sieve_origin(origin_limit: usize, segment_start: usize) -> (Vec<usize>, Vec<usize>) {
+        let mut origin_primes = Vec::new();
+        let mut multiples = Vec::new();
+
+        let mut segment = SieveSegment::new(0, origin_limit);
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
-        while n < self.segment_end {
-            match self.segment.find_prime_and_next_n(n) {
+        while n < origin_limit {
+            match segment.find_prime_and_next_n(n) {
                 (Some(p), next_n) => {
                     n = next_n;
                     // Optimize by starting the multiples search at p^2 (smaller multiples should
                     // already have been struck by previous primes), or the first wheel multiple
                     // within the first segment, whichever is larger.
-                    let factor =
-                        cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(self.segment_start, p)));
-                    self.origin_primes.push(p);
-                    self.multiples.push(p * factor);
-                    self.segment
-                        .strike_prime_and_get_next_multiple(p, p * factor);
+                    let factor = cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(segment_start, p)));
+                    origin_primes.push(p);
+                    multiples.push(p * factor);
+                    segment.strike_prime_and_get_next_multiple(p, p * factor);
                 }
                 (None, _) => break,
             };
         }
+        (origin_primes, multiples)
     }
 
     /// Sieve a segment [start, end) based on an origin segment.
