@@ -106,7 +106,8 @@ impl Sieve {
                         cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(self.segment_start, p)));
                     self.origin_primes.push(p);
                     self.multiples.push(p * factor);
-                    self.segment.strike_prime_and_get_next_multiple(p, p * factor);
+                    self.segment
+                        .strike_prime_and_get_next_multiple(p, p * factor);
                 }
                 (None, _) => break,
             };
@@ -119,7 +120,9 @@ impl Sieve {
         // Optimize by starting the multiples search at the first wheel multiple of p after start.
         // This should already be set in self.multiples
         for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
-            *multiple = self.segment.strike_prime_and_get_next_multiple(p, *multiple);
+            *multiple = self
+                .segment
+                .strike_prime_and_get_next_multiple(p, *multiple);
         }
     }
 
