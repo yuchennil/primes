@@ -80,16 +80,12 @@ impl Sieve {
 
         let mut segment = SieveSegment::new(0, origin_limit);
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
-        while n < origin_limit {
-            if let Some(p) = segment.find_prime(n) {
-                origin_primes.push(p);
-                // Optimize by striking multiples from p^2. Smaller multiples should already
-                // have been struck by previous primes.
-                segment.strike_prime_and_get_next_multiple(p, p * p);
-                n = p + 2;
-            } else {
-                break;
-            }
+        while let Some(p) = segment.find_prime(n) {
+            origin_primes.push(p);
+            // Optimize by striking multiples from p^2. Smaller multiples should already
+            // have been struck by previous primes.
+            segment.strike_prime_and_get_next_multiple(p, p * p);
+            n = p + 2;
         }
         origin_primes
     }
