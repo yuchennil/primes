@@ -74,7 +74,8 @@ impl Sieve {
         };
 
         let segment = SieveSegment::new(segment_start, segment_end);
-        let (origin_primes, multiples) = Sieve::sieve_origin(segment_length, segment_start);
+        let origin_primes = Sieve::sieve_origin(segment_length);
+        let multiples = Sieve::create_multiples(&origin_primes, segment_start);
 
         let mut sieve = Sieve {
             limit,
@@ -90,29 +91,33 @@ impl Sieve {
     }
 
     /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
-    fn sieve_origin(origin_limit: usize, segment_start: usize) -> (Vec<usize>, Vec<usize>) {
+    fn sieve_origin(origin_limit: usize) -> Vec<usize> {
         let mut origin_primes = Vec::new();
-        let mut multiples = Vec::new();
 
         let mut segment = SieveSegment::new(0, origin_limit);
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while n < origin_limit {
-            match segment.find_prime(n) {
-                Some(p) => {
-                    // Optimize by starting the multiples search at p^2 (smaller multiples should
-                    // already have been struck by previous primes), or the first wheel multiple
-                    // within the first segment, whichever is larger.
-                    let multiple =
-                        p * cmp::max(p, Sieve::ceil_wheel(Sieve::ceil_div(segment_start, p)));
-                    origin_primes.push(p);
-                    multiples.push(multiple);
-                    segment.strike_prime_and_get_next_multiple(p, multiple);
-                    n = p + 2;
-                }
-                None => break,
-            };
+            if let Some(p) = segment.find_prime(n) {
+                origin_primes.push(p);
+                // Optimize by striking multiples from p^2. Smaller multiples should already
+                // have been struck by previous primes.
+                segment.strike_prime_and_get_next_multiple(p, p * p);
+                n = p + 2;
+            } else {
+                break;
+            }
         }
-        (origin_primes, multiples)
+        origin_primes
+    }
+
+    // Initialize a vector of prime multiples starting at segment_start
+    fn create_multiples(origin_primes: &[usize], segment_start: usize) -> Vec<usize> {
+        let mut multiples = Vec::new();
+        for &p in origin_primes {
+            let multiple = p * cmp::max(p, Sieve::ceil_wheel(Sieve::ceil_div(segment_start, p)));
+            multiples.push(multiple);
+        }
+        multiples
     }
 
     /// Sieve a segment [start, end) based on an origin segment.
