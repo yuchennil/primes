@@ -43,12 +43,8 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 /// - https://github.com/kimwalisch/primesieve/wiki/Segmented-sieve-of-Eratosthenes
 pub struct Sieve {
     limit: usize,
-    segment_start: usize,
-    segment_end: usize,
-    n: usize,
-    segment: SieveSegment,
     origin_primes: Vec<usize>,
-    multiples: Vec<usize>,
+    iterator_state: SieveIteratorState,
 }
 
 impl Sieve {
@@ -65,29 +61,17 @@ impl Sieve {
         // all remaining segments (which hence don't need to be kept in memory after we've finished
         // sieving through them).
         let segment_length = (limit as f64).sqrt().ceil() as usize;
+        let origin_primes = Sieve::sieve_origin(segment_length);
+
         let segment_start = start as usize;
         let segment_end = cmp::min(segment_start + segment_length, limit);
-        let n = if segment_start <= Sieve::WHEEL_BASIS_PRIME {
-            Sieve::WHEEL_BASIS_PRIME
-        } else {
-            Sieve::ceil_wheel(segment_start)
-        };
+        let iterator_state = SieveIteratorState::new(segment_start, segment_end, &origin_primes);
 
-        let segment = SieveSegment::new(segment_start, segment_end);
-        let origin_primes = Sieve::sieve_origin(segment_length);
-        let multiples = Sieve::create_multiples(&origin_primes, segment_start);
-
-        let mut sieve = Sieve {
+        Sieve {
             limit,
-            segment_start,
-            segment_end,
-            n,
-            segment,
             origin_primes,
-            multiples,
-        };
-        sieve.sieve_segment();
-        sieve
+            iterator_state,
+        }
     }
 
     /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
@@ -109,27 +93,118 @@ impl Sieve {
         }
         origin_primes
     }
+}
+
+impl Iterator for Sieve {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Wheel basis primes aren't included in the wheel sieve's output. We have to
+        // check for them manually.
+        if let Some(p) = self.iterator_state.next_basis_prime(self.limit) {
+            return Some(p as u64);
+        }
+        loop {
+            if let Some(p) = self.iterator_state.next_wheel_prime() {
+                return Some(p as u64);
+            }
+            if self.iterator_state.done(self.limit) {
+                return None;
+            }
+            self.iterator_state
+                .advance_segment(self.limit, &self.origin_primes);
+        }
+    }
+}
+
+struct SieveIteratorState {
+    segment: SieveSegment,
+    multiples: Vec<usize>,
+    segment_start: usize,
+    segment_end: usize,
+    n: usize,
+}
+
+impl SieveIteratorState {
+    fn new(
+        segment_start: usize,
+        segment_end: usize,
+        origin_primes: &[usize],
+    ) -> SieveIteratorState {
+        let segment = SieveSegment::new(segment_start, segment_end);
+        let multiples = SieveIteratorState::create_multiples(origin_primes, segment_start);
+        let n = if segment_start <= Sieve::WHEEL_BASIS_PRIME {
+            Sieve::WHEEL_BASIS_PRIME
+        } else {
+            SieveIteratorState::ceil_wheel(segment_start)
+        };
+
+        let mut iterator_state = SieveIteratorState {
+            segment,
+            multiples,
+            segment_start,
+            segment_end,
+            n,
+        };
+        iterator_state.sieve_segment(origin_primes);
+        iterator_state
+    }
 
     // Initialize a vector of prime multiples starting at segment_start
     fn create_multiples(origin_primes: &[usize], segment_start: usize) -> Vec<usize> {
         let mut multiples = Vec::new();
         for &p in origin_primes {
-            let multiple = p * cmp::max(p, Sieve::ceil_wheel(Sieve::ceil_div(segment_start, p)));
+            let multiple = p * cmp::max(
+                p,
+                SieveIteratorState::ceil_wheel(SieveIteratorState::ceil_div(segment_start, p)),
+            );
             multiples.push(multiple);
         }
         multiples
     }
 
     /// Sieve a segment [start, end) based on an origin segment.
-    fn sieve_segment(&mut self) {
+    fn sieve_segment(&mut self, origin_primes: &[usize]) {
         self.segment.reset(self.segment_start, self.segment_end);
         // Optimize by starting the multiples search at the first wheel multiple of p after start.
         // This should already be set in self.multiples
-        for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
+        for (&p, multiple) in origin_primes.iter().zip(self.multiples.iter_mut()) {
             *multiple = self
                 .segment
                 .strike_prime_and_get_next_multiple(p, *multiple);
         }
+    }
+
+    // Search for and possibly return the next wheel prime
+    fn next_basis_prime(&mut self, limit: usize) -> Option<usize> {
+        if self.n == Sieve::WHEEL_BASIS_PRIME && limit > Sieve::WHEEL_BASIS_PRIME {
+            self.n = Sieve::FIRST_NON_BASIS_PRIME;
+            return Some(Sieve::WHEEL_BASIS_PRIME);
+        }
+        None
+    }
+
+    // Search for and possibly return the next wheel prime
+    fn next_wheel_prime(&mut self) -> Option<usize> {
+        if let Some(p) = self.segment.find_prime(self.n) {
+            self.n = p + 2;
+            return Some(p);
+        }
+        None
+    }
+
+    // Was this the last segment to sieve?
+    fn done(&self, limit: usize) -> bool {
+        self.segment_end == limit
+    }
+
+    // Sieve the next segment
+    fn advance_segment(&mut self, limit: usize, origin_primes: &[usize]) {
+        let segment_length = self.segment_end - self.segment_start;
+        self.segment_start = self.segment_end;
+        self.segment_end = cmp::min(self.segment_start + segment_length, limit);
+        self.n = SieveIteratorState::ceil_wheel(self.segment_start);
+        self.sieve_segment(origin_primes);
     }
 
     // Return the first wheel number at least as large as n
@@ -139,39 +214,6 @@ impl Sieve {
     // Return the dividend a / b, rounded up
     fn ceil_div(a: usize, b: usize) -> usize {
         a / b + (a % b != 0) as usize
-    }
-}
-
-impl Iterator for Sieve {
-    type Item = u64;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Wheel basis primes aren't included in the wheel sieve's output. We have to
-        // check for them manually.
-        if self.n == Sieve::WHEEL_BASIS_PRIME && self.limit > Sieve::WHEEL_BASIS_PRIME {
-            self.n = Sieve::FIRST_NON_BASIS_PRIME;
-            return Some(Sieve::WHEEL_BASIS_PRIME as u64);
-        }
-        // Now iterate through wheel primes
-        loop {
-            // Search for and possibly return the next wheel prime
-            if let Some(p) = self.segment.find_prime(self.n) {
-                self.n = p + 2;
-                return Some(p as u64);
-            }
-
-            // Check if this was the last segment
-            if self.segment_end == self.limit {
-                return None;
-            }
-
-            // Sieve the next segment and try again
-            let segment_length = self.segment_end - self.segment_start;
-            self.segment_start = self.segment_end;
-            self.segment_end = cmp::min(self.segment_start + segment_length, self.limit);
-            self.n = Sieve::ceil_wheel(self.segment_start);
-            self.sieve_segment();
-        }
     }
 }
 
