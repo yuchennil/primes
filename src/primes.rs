@@ -97,9 +97,8 @@ impl Sieve {
         let mut segment = SieveSegment::new(0, origin_limit);
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while n < origin_limit {
-            match segment.find_prime_and_next_n(n) {
-                (Some(p), next_n) => {
-                    n = next_n;
+            match segment.find_prime(n) {
+                Some(p) => {
                     // Optimize by starting the multiples search at p^2 (smaller multiples should
                     // already have been struck by previous primes), or the first wheel multiple
                     // within the first segment, whichever is larger.
@@ -108,8 +107,9 @@ impl Sieve {
                     origin_primes.push(p);
                     multiples.push(multiple);
                     segment.strike_prime_and_get_next_multiple(p, multiple);
+                    n = p + 2;
                 }
-                (None, _) => break,
+                None => break,
             };
         }
         (origin_primes, multiples)
@@ -150,12 +150,9 @@ impl Iterator for Sieve {
         // Now iterate through wheel primes
         loop {
             // Search for and possibly return the next wheel prime
-            match self.segment.find_prime_and_next_n(self.n) {
-                (Some(p), next_n) => {
-                    self.n = next_n;
-                    return Some(p as u64);
-                }
-                (None, next_n) => self.n = next_n,
+            if let Some(p) = self.segment.find_prime(self.n) {
+                self.n = p + 2;
+                return Some(p as u64);
             }
 
             // Check if this was the last segment
@@ -167,6 +164,7 @@ impl Iterator for Sieve {
             let segment_length = self.segment_end - self.segment_start;
             self.segment_start = self.segment_end;
             self.segment_end = cmp::min(self.segment_start + segment_length, self.limit);
+            self.n = Sieve::ceil_wheel(self.segment_start);
             self.sieve_segment();
         }
     }
@@ -212,20 +210,14 @@ impl SieveSegment {
     }
 
     /// Find the next prime at or after n in the sieve.
-    ///
-    /// Also return the next candidate n.
-    fn find_prime_and_next_n(&self, n: usize) -> (Option<usize>, usize) {
-        let mut sieve_segment_n = self.n_to_sieve(n);
-        while sieve_segment_n < self.sieve_segment_length {
+    fn find_prime(&self, n: usize) -> Option<usize> {
+        for sieve_segment_n in self.n_to_sieve(n)..self.sieve_segment_length {
             if self.sieve[sieve_segment_n] {
                 let p = self.sieve_to_n(sieve_segment_n);
-                let next_n = p + 2;
-                return (Some(p), next_n);
+                return Some(p);
             }
-            sieve_segment_n += 1;
         }
-        let next_n = self.sieve_to_n(sieve_segment_n);
-        (None, next_n)
+        None
     }
 
     /// Convert between number space and sieve space.
@@ -305,34 +297,34 @@ mod tests {
     fn sieve_segment_correct() {
         let mut sieve_segment = SieveSegment::new(5, 16);
 
-        // find_prime_and_next_n() when all true
-        assert_eq!((Some(5), 7), sieve_segment.find_prime_and_next_n(5));
-        assert_eq!((Some(7), 9), sieve_segment.find_prime_and_next_n(7));
-        assert_eq!((Some(9), 11), sieve_segment.find_prime_and_next_n(9));
-        assert_eq!((Some(11), 13), sieve_segment.find_prime_and_next_n(11));
-        assert_eq!((Some(13), 15), sieve_segment.find_prime_and_next_n(13));
-        assert_eq!((Some(15), 17), sieve_segment.find_prime_and_next_n(15));
-        assert_eq!((None, 17), sieve_segment.find_prime_and_next_n(17));
+        // find_prime() when all true
+        assert_eq!(Some(5), sieve_segment.find_prime(5));
+        assert_eq!(Some(7), sieve_segment.find_prime(7));
+        assert_eq!(Some(9), sieve_segment.find_prime(9));
+        assert_eq!(Some(11), sieve_segment.find_prime(11));
+        assert_eq!(Some(13), sieve_segment.find_prime(13));
+        assert_eq!(Some(15), sieve_segment.find_prime(15));
+        assert_eq!(None, sieve_segment.find_prime(17));
 
         // strike_prime_and_get_next_multiple()
         assert_eq!(21, sieve_segment.strike_prime_and_get_next_multiple(3, 9));
         assert_eq!(25, sieve_segment.strike_prime_and_get_next_multiple(5, 25));
 
-        // find_prime_and_next_n() after sieving
-        assert_eq!((Some(5), 7), sieve_segment.find_prime_and_next_n(5));
-        assert_eq!((Some(7), 9), sieve_segment.find_prime_and_next_n(7));
-        assert_eq!((Some(11), 13), sieve_segment.find_prime_and_next_n(9));
-        assert_eq!((Some(13), 15), sieve_segment.find_prime_and_next_n(13));
-        assert_eq!((None, 17), sieve_segment.find_prime_and_next_n(15));
+        // find_prime() after sieving
+        assert_eq!(Some(5), sieve_segment.find_prime(5));
+        assert_eq!(Some(7), sieve_segment.find_prime(7));
+        assert_eq!(Some(11), sieve_segment.find_prime(9));
+        assert_eq!(Some(13), sieve_segment.find_prime(13));
+        assert_eq!(None, sieve_segment.find_prime(15));
 
         // reset()
         sieve_segment.reset(16, 22);
 
-        // find_prime_and_next_n() after reset
-        assert_eq!((Some(17), 19), sieve_segment.find_prime_and_next_n(17));
-        assert_eq!((Some(19), 21), sieve_segment.find_prime_and_next_n(19));
-        assert_eq!((Some(21), 23), sieve_segment.find_prime_and_next_n(21));
-        assert_eq!((None, 23), sieve_segment.find_prime_and_next_n(23));
+        // find_prime() after reset
+        assert_eq!(Some(17), sieve_segment.find_prime(17));
+        assert_eq!(Some(19), sieve_segment.find_prime(19));
+        assert_eq!(Some(21), sieve_segment.find_prime(21));
+        assert_eq!(None, sieve_segment.find_prime(23));
     }
 
     #[test]
