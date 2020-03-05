@@ -22,7 +22,7 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 /// The naive sieve requires keeping the entire array in memory, with frequent cache misses due to
 /// striding through the whole array once for each prime. By contrast, a segmented Sieve reduces
 /// memory use and improves locality by partitioning numbers below limit into contiguous segments.
-/// Once we've processed a segment, its memory can be freed and reused. Moreover, if a segment fits
+/// Once we've processed a segment, its memory can be reset and reused. Moreover, if a segment fits
 /// in a CPU's L1/L2/L3 cache, then we can strike all primes within it without extra memory loads.
 ///
 /// A {2, 3, ..., p_k}-wheel sieve further optimizes memory by skipping multiples of the
@@ -37,7 +37,7 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 ///     assert_eq!(vec![2, 3, 5, 7, 11, 13, 17, 19], Sieve::segmented(20).collect::<Vec<_>>());
 ///     assert_eq!(vec![83, 89, 97], Sieve::range(80, 100).collect::<Vec<_>>());
 ///
-/// Algorithm primarily based on Jonathon Sorenson's 1990 "An Introduction to Prime Number Sieves":
+/// Algorithm primarily based on Jonathan Sorenson's 1990 "An Introduction to Prime Number Sieves":
 /// - https://minds.wisconsin.edu/handle/1793/59248
 /// Modern CPU + RAM optimizations due to Kim Walisch's primesieve:
 /// - https://github.com/kimwalisch/primesieve/wiki/Segmented-sieve-of-Eratosthenes
@@ -70,7 +70,7 @@ impl Sieve {
         let n = if segment_start <= Sieve::WHEEL_BASIS_PRIME {
             Sieve::WHEEL_BASIS_PRIME
         } else {
-            Sieve::ceil_odd(segment_start)
+            Sieve::ceil_wheel(segment_start)
         };
 
         let segment = SieveSegment::new(segment_start, segment_end);
@@ -103,10 +103,11 @@ impl Sieve {
                     // Optimize by starting the multiples search at p^2 (smaller multiples should
                     // already have been struck by previous primes), or the first wheel multiple
                     // within the first segment, whichever is larger.
-                    let factor = cmp::max(p, Sieve::ceil_odd(Sieve::ceil_div(segment_start, p)));
+                    let multiple =
+                        p * cmp::max(p, Sieve::ceil_wheel(Sieve::ceil_div(segment_start, p)));
                     origin_primes.push(p);
-                    multiples.push(p * factor);
-                    segment.strike_prime_and_get_next_multiple(p, p * factor);
+                    multiples.push(multiple);
+                    segment.strike_prime_and_get_next_multiple(p, multiple);
                 }
                 (None, _) => break,
             };
@@ -126,9 +127,9 @@ impl Sieve {
         }
     }
 
-    // Return the first odd number at least as large as n
-    fn ceil_odd(n: usize) -> usize {
-        SieveSegment::sieve_to_n(SieveSegment::n_to_sieve(n))
+    // Return the first wheel number at least as large as n
+    fn ceil_wheel(n: usize) -> usize {
+        SieveSegment::sieve_segment_start_to_n(SieveSegment::n_to_sieve_segment_start(n))
     }
     // Return the dividend a / b, rounded up
     fn ceil_div(a: usize, b: usize) -> usize {
@@ -191,9 +192,8 @@ impl SieveSegment {
 
     /// Reset this SieveSegment in-place to avoid constructor/deconstructor costs.
     fn reset(&mut self, segment_start: usize, segment_end: usize) {
-        self.sieve_segment_start = SieveSegment::n_to_sieve(segment_start);
-        self.sieve_segment_length =
-            SieveSegment::n_to_sieve(segment_end) - self.sieve_segment_start;
+        self.sieve_segment_start = SieveSegment::n_to_sieve_segment_start(segment_start);
+        self.sieve_segment_length = self.n_to_sieve(segment_end);
         self.sieve = vec![true; self.sieve_segment_length];
     }
 
@@ -203,29 +203,28 @@ impl SieveSegment {
     ///
     /// Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
     fn strike_prime_and_get_next_multiple(&mut self, p: usize, multiple: usize) -> usize {
-        let mut sieve_segment_multiple =
-            SieveSegment::n_to_sieve(multiple) - self.sieve_segment_start;
+        let mut sieve_segment_multiple = self.n_to_sieve(multiple);
         while sieve_segment_multiple < self.sieve_segment_length {
             self.sieve[sieve_segment_multiple] = false;
             sieve_segment_multiple += p;
         }
-        SieveSegment::sieve_to_n(sieve_segment_multiple + self.sieve_segment_start)
+        self.sieve_to_n(sieve_segment_multiple)
     }
 
     /// Find the next prime at or after n in the sieve.
     ///
     /// Also return the next candidate n.
     fn find_prime_and_next_n(&self, n: usize) -> (Option<usize>, usize) {
-        let mut sieve_segment_n = SieveSegment::n_to_sieve(n) - self.sieve_segment_start;
+        let mut sieve_segment_n = self.n_to_sieve(n);
         while sieve_segment_n < self.sieve_segment_length {
             if self.sieve[sieve_segment_n] {
-                let p = SieveSegment::sieve_to_n(sieve_segment_n + self.sieve_segment_start);
+                let p = self.sieve_to_n(sieve_segment_n);
                 let next_n = p + 2;
                 return (Some(p), next_n);
             }
             sieve_segment_n += 1;
         }
-        let next_n = SieveSegment::sieve_to_n(sieve_segment_n + self.sieve_segment_start);
+        let next_n = self.sieve_to_n(sieve_segment_n);
         (None, next_n)
     }
 
@@ -237,11 +236,17 @@ impl SieveSegment {
     /// This error is acceptable because primes past 2 are all odd, so:
     /// - a lower bound of 2k + 1 won't skip any prime candidate.
     /// - an upper bound of 2k + 1 means 2k - 1 is the last prime candidate. 2k isn't possible.
-    fn n_to_sieve(n: usize) -> usize {
+    fn n_to_sieve_segment_start(n: usize) -> usize {
         n / 2
     }
-    fn sieve_to_n(sieve_n: usize) -> usize {
-        2 * sieve_n + 1
+    fn sieve_segment_start_to_n(sieve_segment_start_n: usize) -> usize {
+        2 * sieve_segment_start_n + 1
+    }
+    fn n_to_sieve(&self, n: usize) -> usize {
+        SieveSegment::n_to_sieve_segment_start(n) - self.sieve_segment_start
+    }
+    fn sieve_to_n(&self, sieve_n: usize) -> usize {
+        SieveSegment::sieve_segment_start_to_n(sieve_n + self.sieve_segment_start)
     }
 }
 
@@ -332,15 +337,11 @@ mod tests {
 
     #[test]
     fn sieve_to_n_to_sieve_correct() {
-        assert_eq!(0, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(0)));
-        assert_eq!(1, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(1)));
-        assert_eq!(2, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(2)));
-        assert_eq!(3, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(3)));
-        assert_eq!(4, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(4)));
-        assert_eq!(5, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(5)));
-        assert_eq!(6, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(6)));
-        assert_eq!(7, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(7)));
-        assert_eq!(8, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(8)));
-        assert_eq!(9, SieveSegment::n_to_sieve(SieveSegment::sieve_to_n(9)));
+        let sieve_segment = SieveSegment::new(5, 10);
+        assert_eq!(5, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(5)));
+        assert_eq!(6, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(6)));
+        assert_eq!(7, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(7)));
+        assert_eq!(8, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(8)));
+        assert_eq!(9, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(9)));
     }
 }
