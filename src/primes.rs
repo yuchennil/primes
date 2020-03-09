@@ -75,18 +75,18 @@ impl Iterator for Sieve {
             // If the current state has a next value, return it.
             use SieveStateMachine::*;
             match self.state_machine {
-                Basis(ref mut sieve_state) => {
-                    if let Some(p) = sieve_state.next() {
+                Basis(ref mut state) => {
+                    if let Some(p) = state.next() {
                         return Some(p);
                     }
                 }
-                Origin(ref mut sieve_state) => {
-                    if let Some(p) = sieve_state.next() {
+                Origin(ref mut state) => {
+                    if let Some(p) = state.next() {
                         return Some(p);
                     }
                 }
-                Wheel(ref mut sieve_state) => {
-                    if let Some(p) = sieve_state.next() {
+                Wheel(ref mut state) => {
+                    if let Some(p) = state.next() {
                         return Some(p);
                     }
                 }
@@ -123,18 +123,18 @@ impl Iterator for Sieve {
 /// Note that we decided *not* to directly make Sieve an enum because that would expose private
 /// implementation details (i.e., the sieve states). Rust considers pub enum variants to be pub.
 enum SieveStateMachine {
-    Basis(SieveState<Basis>),
-    Origin(SieveState<Origin>),
-    Wheel(SieveState<Wheel>),
+    Basis(Basis),
+    Origin(Origin),
+    Wheel(Wheel),
     Done,
 }
 
 impl SieveStateMachine {
     fn new(n: usize, limit: usize, origin_limit: usize) -> SieveStateMachine {
-        SieveStateMachine::Basis(SieveState {
+        SieveStateMachine::Basis(Basis {
             limit,
             origin_limit,
-            state: Basis { n },
+            n
         })
     }
 
@@ -148,31 +148,27 @@ impl SieveStateMachine {
         let mut next = Done;
         mem::swap(self, &mut next);
         next = match next {
-            Basis(sieve_state) => Origin(sieve_state.into()),
-            Origin(sieve_state) => Wheel(sieve_state.into()),
-            Wheel(sieve_state) if !sieve_state.done() => Wheel(sieve_state.advance_segment()),
+            Basis(state) => Origin(state.into()),
+            Origin(state) => Wheel(state.into()),
+            Wheel(state) if !state.done() => Wheel(state.advance_segment()),
             Wheel(_) | Done => Done,
         };
         mem::swap(self, &mut next);
     }
 }
 
-struct SieveState<S> {
+struct Basis {
     limit: usize,
     origin_limit: usize,
-    state: S,
-}
-
-struct Basis {
     n: usize,
 }
 
-impl Iterator for SieveState<Basis> {
+impl Iterator for Basis {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.state.n <= Sieve::WHEEL_BASIS_PRIME {
-            self.state.n = Sieve::FIRST_NON_BASIS_PRIME;
+        if self.n <= Sieve::WHEEL_BASIS_PRIME {
+            self.n = Sieve::FIRST_NON_BASIS_PRIME;
             if Sieve::WHEEL_BASIS_PRIME < self.limit {
                 return Some(Sieve::WHEEL_BASIS_PRIME as u64);
             }
@@ -182,30 +178,32 @@ impl Iterator for SieveState<Basis> {
 }
 
 struct Origin {
+    limit: usize,
+    origin_limit: usize,
+    n: usize,
     origin_primes: Vec<usize>,
     origin_prime_index: usize,
-    n: usize,
 }
 
-impl Iterator for SieveState<Origin> {
+impl Iterator for Origin {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(&p) = self.state.origin_primes.get(self.state.origin_prime_index) {
-            self.state.origin_prime_index += 1;
+        if let Some(&p) = self.origin_primes.get(self.origin_prime_index) {
+            self.origin_prime_index += 1;
             return Some(p as u64);
         }
-        self.state.n = cmp::max(self.state.n, self.origin_limit);
+        self.n = cmp::max(self.n, self.origin_limit);
         None
     }
 }
 
-impl From<SieveState<Basis>> for SieveState<Origin> {
-    fn from(sieve_state: SieveState<Basis>) -> SieveState<Origin> {
-        let limit = sieve_state.limit;
-        let origin_limit = sieve_state.origin_limit;
+impl From<Basis> for Origin {
+    fn from(state: Basis) -> Origin {
+        let limit = state.limit;
+        let origin_limit = state.origin_limit;
 
-        let n = sieve_state.state.n;
+        let n = state.n;
         let origin_primes = Origin::sieve_origin(origin_limit);
         let origin_prime_index = if n < origin_limit {
             origin_primes
@@ -216,14 +214,12 @@ impl From<SieveState<Basis>> for SieveState<Origin> {
             origin_primes.len()
         };
 
-        SieveState {
+        Origin {
             limit,
             origin_limit,
-            state: Origin {
-                origin_primes,
-                origin_prime_index,
-                n,
-            },
+            n,
+            origin_primes,
+            origin_prime_index,
         }
     }
 }
@@ -247,74 +243,51 @@ impl Origin {
 }
 
 struct Wheel {
+    limit: usize,
+    n: usize,
     origin_primes: Vec<usize>,
     multiples: Vec<usize>,
     segment: SieveSegment,
     segment_start: usize,
     segment_end: usize,
-    n: usize,
 }
 
-impl From<SieveState<Origin>> for SieveState<Wheel> {
-    fn from(sieve_state: SieveState<Origin>) -> SieveState<Wheel> {
-        let limit = sieve_state.limit;
-        let origin_limit = sieve_state.origin_limit;
+impl From<Origin> for Wheel {
+    fn from(state: Origin) -> Wheel {
+        let limit = state.limit;
+        let n = Wheel::ceil_wheel(state.n);
+        let origin_primes = state.origin_primes;
 
-        let origin_primes = sieve_state.state.origin_primes;
-        let n = Wheel::ceil_wheel(sieve_state.state.n);
+        let segment_length = state.origin_limit;
         let segment_start = cmp::min(n, limit);
-        let segment_end = cmp::min(segment_start + origin_limit, limit);
+        let segment_end = cmp::min(segment_start + segment_length, limit);
 
         let segment = SieveSegment::new(segment_start, segment_end);
         let multiples = Wheel::create_multiples(&origin_primes, segment_start);
 
         let mut state = Wheel {
+            limit,
+            n,
             origin_primes,
             multiples,
             segment,
             segment_start,
             segment_end,
-            n,
         };
         state.sieve_segment();
-
-        SieveState {
-            limit,
-            origin_limit,
-            state,
-        }
+        state
     }
 }
 
-impl Iterator for SieveState<Wheel> {
+impl Iterator for Wheel {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(p) = self.state.segment.find_prime(self.state.n) {
-            self.state.n = p + 2;
+        if let Some(p) = self.segment.find_prime(self.n) {
+            self.n = p + 2;
             return Some(p as u64);
         }
         None
-    }
-}
-
-impl SieveState<Wheel> {
-    // Was this the last segment to sieve?
-    fn done(&self) -> bool {
-        self.state.segment_end == self.limit
-    }
-
-    // Sieve the next segment, consuming and returning self
-    fn advance_segment(mut self) -> Self {
-        let segment_length = self.state.segment_end - self.state.segment_start;
-
-        self.state.segment_start = self.state.segment_end;
-        self.state.segment_end = cmp::min(self.state.segment_start + segment_length, self.limit);
-        self.state.n = Wheel::ceil_wheel(self.state.segment_start);
-
-        self.state.sieve_segment();
-
-        self
     }
 }
 
@@ -339,6 +312,24 @@ impl Wheel {
                 .segment
                 .strike_prime_and_get_next_multiple(p, *multiple);
         }
+    }
+
+    // Was this the last segment to sieve?
+    fn done(&self) -> bool {
+        self.segment_end == self.limit
+    }
+
+    // Sieve the next segment, consuming and returning self
+    fn advance_segment(mut self) -> Self {
+        let segment_length = self.segment_end - self.segment_start;
+
+        self.segment_start = self.segment_end;
+        self.segment_end = cmp::min(self.segment_start + segment_length, self.limit);
+        self.n = Wheel::ceil_wheel(self.segment_start);
+
+        self.sieve_segment();
+
+        self
     }
 
     // Return the first wheel number at least as large as n
