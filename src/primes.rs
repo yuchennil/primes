@@ -60,10 +60,11 @@ impl Sieve {
         // all remaining segments (which hence don't need to be kept in memory after we've finished
         // sieving through them).
         let origin_limit = (limit as f64).sqrt().ceil() as usize;
+        let n = start as usize;
 
-        let state_machine = SieveStateMachine::new(start as usize, limit, origin_limit);
-
-        Sieve { state_machine }
+        Sieve {
+            state_machine: SieveStateMachine::new(limit, origin_limit, n),
+        }
     }
 }
 
@@ -72,27 +73,12 @@ impl Iterator for Sieve {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // If the current state has a next value, return it.
-            use SieveStateMachine::*;
-            match self.state_machine {
-                Basis(ref mut state) => {
-                    if let Some(p) = state.next() {
-                        return Some(p);
-                    }
-                }
-                Origin(ref mut state) => {
-                    if let Some(p) = state.next() {
-                        return Some(p);
-                    }
-                }
-                Wheel(ref mut state) => {
-                    if let Some(p) = state.next() {
-                        return Some(p);
-                    }
-                }
-                Done => return None,
-            };
-            // Otherwise step to the next state of the state machine and try again.
+            if let Some(p) = self.state_machine.next() {
+                return Some(p as u64);
+            }
+            if let SieveStateMachine::Done = self.state_machine {
+                return None;
+            }
             self.state_machine.step();
         }
     }
@@ -129,12 +115,28 @@ enum SieveStateMachine {
     Done,
 }
 
+impl Iterator for SieveStateMachine {
+    type Item = usize;
+
+    /// Return the next prime in the sieve, if possible.
+    fn next(&mut self) -> Option<Self::Item> {
+        use SieveStateMachine::*;
+
+        match self {
+            Basis(ref mut state) => state.next(),
+            Origin(ref mut state) => state.next(),
+            Wheel(ref mut state) => state.next(),
+            Done => None,
+        }
+    }
+}
+
 impl SieveStateMachine {
-    fn new(n: usize, limit: usize, origin_limit: usize) -> SieveStateMachine {
+    fn new(limit: usize, origin_limit: usize, n: usize) -> SieveStateMachine {
         SieveStateMachine::Basis(Basis {
             limit,
             origin_limit,
-            n
+            n,
         })
     }
 
@@ -164,13 +166,13 @@ struct Basis {
 }
 
 impl Iterator for Basis {
-    type Item = u64;
+    type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.n <= Sieve::WHEEL_BASIS_PRIME {
             self.n = Sieve::FIRST_NON_BASIS_PRIME;
             if Sieve::WHEEL_BASIS_PRIME < self.limit {
-                return Some(Sieve::WHEEL_BASIS_PRIME as u64);
+                return Some(Sieve::WHEEL_BASIS_PRIME);
             }
         }
         None
@@ -186,12 +188,12 @@ struct Origin {
 }
 
 impl Iterator for Origin {
-    type Item = u64;
+    type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(&p) = self.origin_primes.get(self.origin_prime_index) {
             self.origin_prime_index += 1;
-            return Some(p as u64);
+            return Some(p);
         }
         self.n = cmp::max(self.n, self.origin_limit);
         None
@@ -280,12 +282,12 @@ impl From<Origin> for Wheel {
 }
 
 impl Iterator for Wheel {
-    type Item = u64;
+    type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(p) = self.segment.find_prime(self.n) {
             self.n = p + 2;
-            return Some(p as u64);
+            return Some(p);
         }
         None
     }
