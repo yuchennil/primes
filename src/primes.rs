@@ -56,14 +56,10 @@ impl Sieve {
 
     pub fn range(start: u64, end: u64) -> Sieve {
         let limit = end as usize;
-        // origin_limit is just above sqrt(limit) so that the origin primes suffice to sieve
-        // all remaining segments (which hence don't need to be kept in memory after we've finished
-        // sieving through them).
-        let origin_limit = (limit as f64).sqrt().ceil() as usize;
         let n = start as usize;
 
         Sieve {
-            state_machine: SieveStateMachine::new(limit, origin_limit, n),
+            state_machine: SieveStateMachine::new(limit, n),
         }
     }
 }
@@ -132,12 +128,8 @@ impl Iterator for SieveStateMachine {
 }
 
 impl SieveStateMachine {
-    fn new(limit: usize, origin_limit: usize, n: usize) -> SieveStateMachine {
-        SieveStateMachine::Basis(Basis {
-            limit,
-            origin_limit,
-            n,
-        })
+    fn new(limit: usize, n: usize) -> SieveStateMachine {
+        SieveStateMachine::Basis(Basis { limit, n })
     }
 
     /// Step the state machine in place (consuming the previous state without moving it).
@@ -161,7 +153,6 @@ impl SieveStateMachine {
 
 struct Basis {
     limit: usize,
-    origin_limit: usize,
     n: usize,
 }
 
@@ -203,9 +194,12 @@ impl Iterator for Origin {
 impl From<Basis> for Origin {
     fn from(state: Basis) -> Origin {
         let limit = state.limit;
-        let origin_limit = state.origin_limit;
-
         let n = state.n;
+
+        // origin_limit is just above sqrt(limit) so that the origin primes suffice to sieve
+        // all remaining segments (which hence don't need to be kept in memory after we've finished
+        // sieving through them).
+        let origin_limit = (limit as f64).sqrt().ceil() as usize;
         let origin_primes = Origin::sieve_origin(origin_limit);
         let origin_prime_index = if n < origin_limit {
             origin_primes
