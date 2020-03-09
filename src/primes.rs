@@ -60,28 +60,10 @@ impl Sieve {
         // all remaining segments (which hence don't need to be kept in memory after we've finished
         // sieving through them).
         let origin_limit = (limit as f64).sqrt().ceil() as usize;
-        let origin_primes = Sieve::sieve_origin(origin_limit);
 
-        let state_machine =
-            SieveStateMachine::new(start as usize, limit, origin_limit, origin_primes);
+        let state_machine = SieveStateMachine::new(start as usize, limit, origin_limit);
 
         Sieve { state_machine }
-    }
-
-    /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
-    fn sieve_origin(origin_limit: usize) -> Vec<usize> {
-        let mut origin_primes = Vec::new();
-
-        let mut segment = SieveSegment::new(0, origin_limit);
-        let mut n = Sieve::FIRST_NON_BASIS_PRIME;
-        while let Some(p) = segment.find_prime(n) {
-            origin_primes.push(p);
-            // Optimize by striking multiples from p^2. Smaller multiples should already
-            // have been struck by previous primes.
-            segment.strike_prime_and_get_next_multiple(p, p * p);
-            n = p + 2;
-        }
-        origin_primes
     }
 }
 
@@ -148,16 +130,10 @@ enum SieveStateMachine {
 }
 
 impl SieveStateMachine {
-    fn new(
-        n: usize,
-        limit: usize,
-        origin_limit: usize,
-        origin_primes: Vec<usize>,
-    ) -> SieveStateMachine {
+    fn new(n: usize, limit: usize, origin_limit: usize) -> SieveStateMachine {
         SieveStateMachine::Basis(SieveState {
             limit,
             origin_limit,
-            origin_primes,
             state: Basis { n },
         })
     }
@@ -184,7 +160,6 @@ impl SieveStateMachine {
 struct SieveState<S> {
     limit: usize,
     origin_limit: usize,
-    origin_primes: Vec<usize>,
     state: S,
 }
 
@@ -207,6 +182,7 @@ impl Iterator for SieveState<Basis> {
 }
 
 struct Origin {
+    origin_primes: Vec<usize>,
     origin_prime_index: usize,
     n: usize,
 }
@@ -215,7 +191,7 @@ impl Iterator for SieveState<Origin> {
     type Item = u64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(&p) = self.origin_primes.get(self.state.origin_prime_index) {
+        if let Some(&p) = self.state.origin_primes.get(self.state.origin_prime_index) {
             self.state.origin_prime_index += 1;
             return Some(p as u64);
         }
@@ -228,9 +204,9 @@ impl From<SieveState<Basis>> for SieveState<Origin> {
     fn from(sieve_state: SieveState<Basis>) -> SieveState<Origin> {
         let limit = sieve_state.limit;
         let origin_limit = sieve_state.origin_limit;
-        let origin_primes = sieve_state.origin_primes;
 
         let n = sieve_state.state.n;
+        let origin_primes = Origin::sieve_origin(origin_limit);
         let origin_prime_index = if n < origin_limit {
             origin_primes
                 .iter()
@@ -243,18 +219,37 @@ impl From<SieveState<Basis>> for SieveState<Origin> {
         SieveState {
             limit,
             origin_limit,
-            origin_primes,
             state: Origin {
-                n,
+                origin_primes,
                 origin_prime_index,
+                n,
             },
         }
     }
 }
 
+impl Origin {
+    /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
+    fn sieve_origin(origin_limit: usize) -> Vec<usize> {
+        let mut origin_primes = Vec::new();
+
+        let mut segment = SieveSegment::new(0, origin_limit);
+        let mut n = Sieve::FIRST_NON_BASIS_PRIME;
+        while let Some(p) = segment.find_prime(n) {
+            origin_primes.push(p);
+            // Optimize by striking multiples from p^2. Smaller multiples should already
+            // have been struck by previous primes.
+            segment.strike_prime_and_get_next_multiple(p, p * p);
+            n = p + 2;
+        }
+        origin_primes
+    }
+}
+
 struct Wheel {
-    segment: SieveSegment,
+    origin_primes: Vec<usize>,
     multiples: Vec<usize>,
+    segment: SieveSegment,
     segment_start: usize,
     segment_end: usize,
     n: usize,
@@ -264,8 +259,8 @@ impl From<SieveState<Origin>> for SieveState<Wheel> {
     fn from(sieve_state: SieveState<Origin>) -> SieveState<Wheel> {
         let limit = sieve_state.limit;
         let origin_limit = sieve_state.origin_limit;
-        let origin_primes = sieve_state.origin_primes;
 
+        let origin_primes = sieve_state.state.origin_primes;
         let n = Wheel::ceil_wheel(sieve_state.state.n);
         let segment_start = cmp::min(n, limit);
         let segment_end = cmp::min(segment_start + origin_limit, limit);
@@ -274,18 +269,18 @@ impl From<SieveState<Origin>> for SieveState<Wheel> {
         let multiples = Wheel::create_multiples(&origin_primes, segment_start);
 
         let mut state = Wheel {
-            segment,
+            origin_primes,
             multiples,
+            segment,
             segment_start,
             segment_end,
             n,
         };
-        state.sieve_segment(&origin_primes);
+        state.sieve_segment();
 
         SieveState {
             limit,
             origin_limit,
-            origin_primes,
             state,
         }
     }
@@ -317,7 +312,7 @@ impl SieveState<Wheel> {
         self.state.segment_end = cmp::min(self.state.segment_start + segment_length, self.limit);
         self.state.n = Wheel::ceil_wheel(self.state.segment_start);
 
-        self.state.sieve_segment(&self.origin_primes);
+        self.state.sieve_segment();
 
         self
     }
@@ -335,11 +330,11 @@ impl Wheel {
     }
 
     /// Sieve a segment [start, end) based on an origin segment.
-    fn sieve_segment(&mut self, origin_primes: &[usize]) {
+    fn sieve_segment(&mut self) {
         self.segment.reset(self.segment_start, self.segment_end);
         // Optimize by starting the multiples search at the first wheel multiple of p after start.
         // This should already be set in self.multiples
-        for (&p, multiple) in origin_primes.iter().zip(self.multiples.iter_mut()) {
+        for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
             *multiple = self
                 .segment
                 .strike_prime_and_get_next_multiple(p, *multiple);
