@@ -172,18 +172,18 @@ impl Iterator for Basis {
 
 struct Origin {
     limit: usize,
-    origin_limit: usize,
     n: usize,
+    origin_limit: usize,
     origin_primes: Vec<usize>,
-    origin_prime_index: usize,
+    origin_primes_index: usize,
 }
 
 impl Iterator for Origin {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(&p) = self.origin_primes.get(self.origin_prime_index) {
-            self.origin_prime_index += 1;
+        if let Some(&p) = self.origin_primes.get(self.origin_primes_index) {
+            self.origin_primes_index += 1;
             return Some(p);
         }
         self.n = cmp::max(self.n, self.origin_limit);
@@ -196,33 +196,29 @@ impl From<Basis> for Origin {
         let limit = state.limit;
         let n = state.n;
 
-        // origin_limit is just above sqrt(limit) so that the origin primes suffice to sieve
-        // all remaining segments (which hence don't need to be kept in memory after we've finished
-        // sieving through them).
-        let origin_limit = (limit as f64).sqrt().ceil() as usize;
-        let origin_primes = Origin::sieve_origin(origin_limit);
-        let origin_prime_index = if n < origin_limit {
-            origin_primes
-                .iter()
-                .position(|&p| p >= n)
-                .unwrap_or_else(|| origin_primes.len())
-        } else {
-            origin_primes.len()
-        };
+        let origin_limit = Origin::origin_limit(limit);
+        let origin_primes = Origin::origin_primes(origin_limit);
+        let origin_primes_index = Origin::origin_primes_index(n, origin_limit, &origin_primes);
 
         Origin {
             limit,
-            origin_limit,
             n,
+            origin_limit,
             origin_primes,
-            origin_prime_index,
+            origin_primes_index,
         }
     }
 }
 
 impl Origin {
+    // origin_limit is just above sqrt(limit) so that the origin primes suffice to sieve
+    // all remaining segments (which hence don't need to be kept in memory after we've finished
+    // sieving through them).
+    fn origin_limit(limit: usize) -> usize {
+        (limit as f64).sqrt().ceil() as usize
+    }
     /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
-    fn sieve_origin(origin_limit: usize) -> Vec<usize> {
+    fn origin_primes(origin_limit: usize) -> Vec<usize> {
         let mut origin_primes = Vec::new();
 
         let mut segment = SieveSegment::new(0, origin_limit);
@@ -235,6 +231,18 @@ impl Origin {
             n = p + 2;
         }
         origin_primes
+    }
+
+    /// Find the index of the first prime in origin_primes greater than n.
+    fn origin_primes_index(n: usize, origin_limit: usize, origin_primes: &[usize]) -> usize {
+        if n < origin_limit {
+            origin_primes
+                .iter()
+                .position(|&p| p >= n)
+                .unwrap_or_else(|| origin_primes.len())
+        } else {
+            origin_primes.len()
+        }
     }
 }
 
