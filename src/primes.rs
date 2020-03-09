@@ -99,7 +99,7 @@ impl Iterator for Sieve {
 ///     Basis -> Origin -> Wheel -> Done
 ///                        ^___|
 ///
-/// As a result, we can transparently get a single iterator through all primes, while enforcing
+/// As a result, we can transparently get a single iterator through all primes, while ensuring
 /// mutable state is managed safely.
 ///
 /// Note that we decided *not* to directly make Sieve an enum because that would expose private
@@ -182,12 +182,9 @@ impl Iterator for Origin {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(&p) = self.origin_primes.get(self.origin_primes_index) {
-            self.origin_primes_index += 1;
-            return Some(p);
-        }
-        self.n = cmp::max(self.n, self.origin_limit);
-        None
+        let p = *self.origin_primes.get(self.origin_primes_index)?;
+        self.origin_primes_index += 1;
+        Some(p)
     }
 }
 
@@ -199,6 +196,10 @@ impl From<Basis> for Origin {
         let origin_limit = Origin::origin_limit(limit);
         let origin_primes = Origin::origin_primes(origin_limit);
         let origin_primes_index = Origin::origin_primes_index(n, origin_limit, &origin_primes);
+
+        // Origin itself never touches n. Advance n to origin_limit so it will be correct when
+        // passed to Wheel.
+        let n = cmp::max(n, origin_limit);
 
         Origin {
             limit,
@@ -287,11 +288,9 @@ impl Iterator for Wheel {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(p) = self.segment.find_prime(self.n) {
-            self.n = p + 2;
-            return Some(p);
-        }
-        None
+        let p = self.segment.find_prime(self.n)?;
+        self.n = p + 2;
+        Some(p)
     }
 }
 
