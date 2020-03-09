@@ -72,10 +72,10 @@ impl Iterator for Sieve {
             if let Some(p) = self.state_machine.next() {
                 return Some(p as u64);
             }
+            self.state_machine.step();
             if let SieveStateMachine::Done = self.state_machine {
                 return None;
             }
-            self.state_machine.step();
         }
     }
 }
