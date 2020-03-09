@@ -115,6 +115,7 @@ impl Iterator for SieveStateMachine {
 }
 
 impl SieveStateMachine {
+    /// All new SieveStateMachines must start from a Basis state.
     fn new(limit: usize, n: usize) -> SieveStateMachine {
         SieveStateMachine::Basis(Basis { limit, n })
     }
@@ -180,9 +181,9 @@ impl From<Basis> for Origin {
         let limit = state.limit;
         let n = state.n;
 
-        let origin_limit = Origin::origin_limit(limit);
-        let origin_primes = Origin::origin_primes(origin_limit);
-        let origin_primes_index = Origin::origin_primes_index(n, origin_limit, &origin_primes);
+        let origin_limit = Origin::limit(limit);
+        let origin_primes = Origin::primes(origin_limit);
+        let origin_primes_index = Origin::primes_index(n, origin_limit, &origin_primes);
 
         // Origin itself never touches n. Advance n to origin_limit so it will be correct when
         // passed to Wheel.
@@ -202,11 +203,11 @@ impl Origin {
     // origin_limit is just above sqrt(limit) so that the origin primes suffice to sieve
     // all remaining segments (which hence don't need to be kept in memory after we've finished
     // sieving through them).
-    fn origin_limit(limit: usize) -> usize {
+    fn limit(limit: usize) -> usize {
         (limit as f64).sqrt().ceil() as usize
     }
     /// Sieve an origin segment [0, origin_limit) using Eratosthenes, skipping non-wheel numbers.
-    fn origin_primes(origin_limit: usize) -> Vec<usize> {
+    fn primes(origin_limit: usize) -> Vec<usize> {
         let mut origin_primes = Vec::new();
 
         let mut segment = SieveSegment::new(0, origin_limit);
@@ -222,7 +223,7 @@ impl Origin {
     }
 
     /// Find the index of the first prime in origin_primes greater than n.
-    fn origin_primes_index(n: usize, origin_limit: usize, origin_primes: &[usize]) -> usize {
+    fn primes_index(n: usize, origin_limit: usize, origin_primes: &[usize]) -> usize {
         if n < origin_limit {
             origin_primes
                 .iter()
