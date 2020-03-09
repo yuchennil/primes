@@ -1,18 +1,5 @@
-/// Library for utilities related to primes
 use std::cmp;
 use std::mem;
-
-/// Euclidean algorithm
-pub fn gcd(a: u64, b: u64) -> u64 {
-    let mut a = a;
-    let mut b = b;
-    while b > 0 {
-        let t = b;
-        b = a % b;
-        a = t;
-    }
-    a
-}
 
 /// {2}-wheel segmented sieve of Eratosthenes to generate all primes below a given limit
 ///
@@ -420,14 +407,6 @@ impl SieveSegment {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn gcd_correct() {
-        assert_eq!(4, gcd(8, 12));
-        assert_eq!(4, gcd(12, 8));
-        assert_eq!(15, gcd(15, 15));
-        assert_eq!(1, gcd(47, 23));
-    }
 
     #[test]
     fn sieve_segmented_correct() {
