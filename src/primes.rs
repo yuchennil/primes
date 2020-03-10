@@ -10,8 +10,8 @@ use std::mem;
 /// The naive sieve requires keeping the entire array in memory, with frequent cache misses due to
 /// striding through the whole array once for each prime. By contrast, a segmented Sieve reduces
 /// memory use and improves locality by partitioning numbers below limit into contiguous segments.
-/// Once we've processed a segment, its memory can be reset and reused. Moreover, if a segment fits
-/// in a CPU's L1/L2/L3 cache, then we can strike all primes within it without extra memory loads.
+/// Once we've processed a segment, its memory can be discarded. Moreover, if a segment fits in
+/// a CPU's L1/L2/L3 cache, then we can strike all primes within it without extra memory loads.
 ///
 /// In Rust a bool is represented with a single byte. Keeping a vector of bits saves eight times
 /// the memory compared to a vector of bools representing the same segment, although access costs
@@ -298,7 +298,7 @@ impl Wheel {
 
     /// Sieve a segment [start, end) based on an origin segment.
     fn sieve_segment(&mut self) {
-        self.segment.reset(self.segment_start, self.segment_end);
+        self.segment = SieveSegment::new(self.segment_start, self.segment_end);
         // Optimize by starting the multiples search at the first wheel multiple of p after start.
         // This should already be set in self.multiples
         for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
@@ -343,20 +343,16 @@ struct SieveSegment {
 impl SieveSegment {
     /// Create an unsieved SieveSegment in [start, end).
     fn new(segment_start: usize, segment_end: usize) -> SieveSegment {
-        let mut sieve_segment = SieveSegment {
-            sieve: BitVec::new(),
-            sieve_segment_start: 0,
-            sieve_segment_length: 0,
-        };
-        sieve_segment.reset(segment_start, segment_end);
-        sieve_segment
-    }
+        let sieve_segment_start = SieveSegment::n_to_sieve_segment_start(segment_start);
+        let sieve_segment_length =
+            SieveSegment::n_to_sieve_segment_start(segment_end) - sieve_segment_start;
+        let sieve = BitVec::new(sieve_segment_length);
 
-    /// Reset this SieveSegment in-place to avoid constructor/deconstructor costs.
-    fn reset(&mut self, segment_start: usize, segment_end: usize) {
-        self.sieve_segment_start = SieveSegment::n_to_sieve_segment_start(segment_start);
-        self.sieve_segment_length = self.n_to_sieve(segment_end);
-        self.sieve.reset(self.sieve_segment_length);
+        SieveSegment {
+            sieve,
+            sieve_segment_start,
+            sieve_segment_length,
+        }
     }
 
     /// Strike multiples of prime in sieve.
@@ -414,12 +410,8 @@ impl BitVec {
     const MASK: usize = 0b111;
     const ONES: u8 = std::u8::MAX;
 
-    pub fn new() -> BitVec {
-        BitVec(Vec::new())
-    }
-
-    pub fn reset(&mut self, len: usize) {
-        self.0 = vec![BitVec::ONES; Wheel::ceil_div(len, BitVec::BOOL_BITS)];
+    pub fn new(len: usize) -> BitVec {
+        BitVec(vec![BitVec::ONES; Wheel::ceil_div(len, BitVec::BOOL_BITS)])
     }
 
     pub fn get(&self, index: usize) -> bool {
@@ -497,15 +489,6 @@ mod tests {
         assert_eq!(Some(11), sieve_segment.find_prime(9));
         assert_eq!(Some(13), sieve_segment.find_prime(13));
         assert_eq!(None, sieve_segment.find_prime(15));
-
-        // reset()
-        sieve_segment.reset(16, 22);
-
-        // find_prime() after reset
-        assert_eq!(Some(17), sieve_segment.find_prime(17));
-        assert_eq!(Some(19), sieve_segment.find_prime(19));
-        assert_eq!(Some(21), sieve_segment.find_prime(21));
-        assert_eq!(None, sieve_segment.find_prime(23));
     }
 
     #[test]
@@ -520,8 +503,7 @@ mod tests {
 
     #[test]
     fn bit_vec_correct() {
-        let mut bit_vec = BitVec::new();
-        bit_vec.reset(12);
+        let mut bit_vec = BitVec::new(12);
 
         bit_vec.unset(2);
         bit_vec.unset(3);
@@ -540,20 +522,6 @@ mod tests {
         assert_eq!(true, bit_vec.get(9));
         assert_eq!(true, bit_vec.get(10));
         assert_eq!(false, bit_vec.get(11));
-
-        bit_vec.reset(12);
-        assert_eq!(true, bit_vec.get(0));
-        assert_eq!(true, bit_vec.get(1));
-        assert_eq!(true, bit_vec.get(2));
-        assert_eq!(true, bit_vec.get(3));
-        assert_eq!(true, bit_vec.get(4));
-        assert_eq!(true, bit_vec.get(5));
-        assert_eq!(true, bit_vec.get(6));
-        assert_eq!(true, bit_vec.get(7));
-        assert_eq!(true, bit_vec.get(8));
-        assert_eq!(true, bit_vec.get(9));
-        assert_eq!(true, bit_vec.get(10));
-        assert_eq!(true, bit_vec.get(11));
     }
 
     #[bench]
