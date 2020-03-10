@@ -13,6 +13,10 @@ use std::mem;
 /// Once we've processed a segment, its memory can be reset and reused. Moreover, if a segment fits
 /// in a CPU's L1/L2/L3 cache, then we can strike all primes within it without extra memory loads.
 ///
+/// In Rust a bool is represented with a single byte. Keeping a vector of bits saves eight times
+/// the memory compared to a vector of bools representing the same segment, although access costs
+/// a couple extra CPU cycles due to bit operations.
+///
 /// A {2, 3, ..., p_k}-wheel sieve further optimizes memory by skipping multiples of the
 /// small primes 2, 3, ..., p_k. The only prime candidates we need to consider will be coprime
 /// to these small primes, saving us 1/2 strikes for a {2}-wheel, 4/6 strikes for a {2, 3}-wheel,
