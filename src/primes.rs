@@ -491,4 +491,24 @@ mod tests {
         assert_eq!(8, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(8)));
         assert_eq!(9, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(9)));
     }
+
+    #[bench]
+    fn enumerate_primes(b: &mut test::Bencher) {
+        b.iter(|| for _ in Sieve::segmented(1_000_000) { continue; })
+    }
+
+    #[bench]
+    fn origin_primes(b: &mut test::Bencher) {
+        b.iter(|| Origin::primes(10_000))
+    }
+
+    #[bench]
+    fn wheel_segment(b: &mut test::Bencher) {
+        let mut state = SieveStateMachine::new(10_usize.pow(10), 9_876_543_210);
+        state.step();
+        state.step();
+        if let SieveStateMachine::Wheel(mut wheel) = state {
+            b.iter(|| wheel.sieve_segment())
+        }
+    }
 }
