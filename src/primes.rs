@@ -36,6 +36,8 @@ pub struct Sieve {
 impl Sieve {
     const WHEEL_BASIS_PRIME: usize = 2;
     const FIRST_NON_BASIS_PRIME: usize = 3;
+    const L1_CACHE_BYTES: usize = 32_768;
+    const SEGMENT_LENGTH: usize = 2 * Sieve::L1_CACHE_BYTES * BitVec::BOOL_BITS;
 
     pub fn segmented(limit: u64) -> Sieve {
         Sieve::range(0, limit)
@@ -161,7 +163,6 @@ impl Iterator for Basis {
 struct Origin {
     limit: usize,
     n: usize,
-    origin_limit: usize,
     origin_primes: Vec<usize>,
     origin_primes_index: usize,
 }
@@ -192,7 +193,6 @@ impl From<Basis> for Origin {
         Origin {
             limit,
             n,
-            origin_limit,
             origin_primes,
             origin_primes_index,
         }
@@ -251,9 +251,8 @@ impl From<Origin> for Wheel {
         let n = Wheel::ceil_wheel(state.n);
         let origin_primes = state.origin_primes;
 
-        let segment_length = state.origin_limit;
         let segment_start = cmp::min(n, limit);
-        let segment_end = cmp::min(segment_start + segment_length, limit);
+        let segment_end = cmp::min(segment_start + Sieve::SEGMENT_LENGTH, limit);
 
         let segment = SieveSegment::new(segment_start, segment_end);
         let multiples = Wheel::create_multiples(&origin_primes, segment_start);
@@ -312,10 +311,8 @@ impl Wheel {
 
     // Sieve the next segment, consuming and returning self
     fn advance_segment(mut self) -> Self {
-        let segment_length = self.segment_end - self.segment_start;
-
         self.segment_start = self.segment_end;
-        self.segment_end = cmp::min(self.segment_start + segment_length, self.limit);
+        self.segment_end = cmp::min(self.segment_start + Sieve::SEGMENT_LENGTH, self.limit);
         self.n = Wheel::ceil_wheel(self.segment_start);
 
         self.sieve_segment();
