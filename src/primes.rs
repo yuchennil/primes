@@ -1,7 +1,8 @@
+use arr_macro::arr;
 use std::cmp;
 use std::mem;
 
-/// {2}-wheel segmented sieve of Eratosthenes to generate all primes below a given limit
+/// {2, 3, 5, 7}-wheel segmented sieve of Eratosthenes to generate all primes below a given limit
 ///
 /// The naive sieve of Eratosthenes strikes multiples of a given prime from a fixed array. The
 /// first unstruck number in the array is then the next smallest prime, and we repeat this process
@@ -38,10 +39,12 @@ pub struct Sieve {
 }
 
 impl Sieve {
-    const WHEEL_BASIS_PRIME: usize = 2;
-    const FIRST_NON_BASIS_PRIME: usize = 3;
+    const BASIS_PRIMES: [usize; 4] = [2, 3, 5, 7];
+    const FIRST_NON_BASIS_PRIME: usize = 11;
+    const SPOKE_SIZE: usize = 48;
+    const WHEEL_SIZE: usize = 210;
     const L1_CACHE_BYTES: usize = 32_768;
-    const SEGMENT_LENGTH: usize = 2 * Sieve::L1_CACHE_BYTES * BitVec::BOOL_BITS;
+    const SEGMENT_LENGTH: usize = Sieve::WHEEL_SIZE * Sieve::L1_CACHE_BYTES * BitVec::BOOL_BITS;
 
     pub fn segmented(limit: u64) -> Sieve {
         Sieve::range(0, limit)
@@ -123,7 +126,7 @@ impl Iterator for SieveStateMachine {
 impl SieveStateMachine {
     /// All new SieveStateMachines must start from a Basis state.
     fn new(limit: usize, n: usize) -> SieveStateMachine {
-        SieveStateMachine::Basis(Basis { limit, n })
+        SieveStateMachine::Basis(Basis::new(limit, n))
     }
 
     /// Step the state machine in place (consuming the previous state without moving it).
@@ -148,19 +151,48 @@ impl SieveStateMachine {
 struct Basis {
     limit: usize,
     n: usize,
+    basis_primes_index: usize,
 }
 
 impl Iterator for Basis {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.n <= Sieve::WHEEL_BASIS_PRIME {
-            self.n = Sieve::FIRST_NON_BASIS_PRIME;
-            if Sieve::WHEEL_BASIS_PRIME < self.limit {
-                return Some(Sieve::WHEEL_BASIS_PRIME);
+        match Sieve::BASIS_PRIMES.get(self.basis_primes_index) {
+            Some(&p) if p < self.limit => {
+                self.basis_primes_index += 1;
+                Some(p)
             }
+            _ => None,
         }
-        None
+    }
+}
+
+impl Basis {
+    fn new(limit: usize, n: usize) -> Basis {
+        let basis_primes_index = Basis::primes_index(n);
+
+        // Basis itself never touches n. Advance n to FIRST_NON_BASIS_PRIME so it will be correct
+        // when passed to Origin.
+        let n = cmp::max(n, Sieve::FIRST_NON_BASIS_PRIME);
+
+        Basis {
+            limit,
+            n,
+            basis_primes_index,
+        }
+    }
+
+    /// Find the index of the first prime in BASIS_PRIMES greater than n.
+    fn primes_index(n: usize) -> usize {
+        if n < Sieve::FIRST_NON_BASIS_PRIME {
+            Sieve::BASIS_PRIMES
+                .iter()
+                .position(|&p| p >= n)
+                .unwrap_or_else(|| Sieve::BASIS_PRIMES.len())
+        } else {
+            Sieve::BASIS_PRIMES.len()
+        }
     }
 }
 
@@ -214,14 +246,12 @@ impl Origin {
     fn primes(origin_limit: usize) -> Vec<usize> {
         let mut origin_primes = Vec::new();
 
-        let mut segment = SieveSegment::new(0, origin_limit);
+        let mut segment = Segment::new(0, origin_limit);
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while let Some(p) = segment.find_prime(n) {
             origin_primes.push(p);
-            // Optimize by striking multiples from p^2. Smaller multiples should already
-            // have been struck by previous primes.
-            segment.strike_prime_and_get_next_multiple(p, p * p);
-            n = p + 2;
+            segment.strike_primes(&[p]);
+            n = p + 1;
         }
         origin_primes
     }
@@ -243,8 +273,7 @@ struct Wheel {
     limit: usize,
     n: usize,
     origin_primes: Vec<usize>,
-    multiples: Vec<usize>,
-    segment: SieveSegment,
+    segment: Segment,
     segment_start: usize,
     segment_end: usize,
 }
@@ -252,20 +281,17 @@ struct Wheel {
 impl From<Origin> for Wheel {
     fn from(state: Origin) -> Wheel {
         let limit = state.limit;
-        let n = Wheel::ceil_wheel(state.n);
+        let n = state.n;
         let origin_primes = state.origin_primes;
 
         let segment_start = cmp::min(n, limit);
         let segment_end = cmp::min(segment_start + Sieve::SEGMENT_LENGTH, limit);
-
-        let segment = SieveSegment::new(segment_start, segment_end);
-        let multiples = Wheel::create_multiples(&origin_primes, segment_start);
+        let segment = Segment::new(segment_start, segment_end);
 
         let mut state = Wheel {
             limit,
             n,
             origin_primes,
-            multiples,
             segment,
             segment_start,
             segment_end,
@@ -280,32 +306,16 @@ impl Iterator for Wheel {
 
     fn next(&mut self) -> Option<Self::Item> {
         let p = self.segment.find_prime(self.n)?;
-        self.n = p + 2;
+        self.n = p + 1;
         Some(p)
     }
 }
 
 impl Wheel {
-    // Initialize a vector of prime multiples starting at segment_start
-    fn create_multiples(origin_primes: &[usize], segment_start: usize) -> Vec<usize> {
-        let mut multiples = Vec::new();
-        for &p in origin_primes {
-            let multiple = p * cmp::max(p, Wheel::ceil_wheel(Wheel::ceil_div(segment_start, p)));
-            multiples.push(multiple);
-        }
-        multiples
-    }
-
     /// Sieve a segment [start, end) based on an origin segment.
     fn sieve_segment(&mut self) {
-        self.segment = SieveSegment::new(self.segment_start, self.segment_end);
-        // Optimize by starting the multiples search at the first wheel multiple of p after start.
-        // This should already be set in self.multiples
-        for (&p, multiple) in self.origin_primes.iter().zip(self.multiples.iter_mut()) {
-            *multiple = self
-                .segment
-                .strike_prime_and_get_next_multiple(p, *multiple);
-        }
+        self.segment = Segment::new(self.segment_start, self.segment_end);
+        self.segment.strike_primes(&self.origin_primes);
     }
 
     // Was this the last segment to sieve?
@@ -317,88 +327,159 @@ impl Wheel {
     fn advance_segment(mut self) -> Self {
         self.segment_start = self.segment_end;
         self.segment_end = cmp::min(self.segment_start + Sieve::SEGMENT_LENGTH, self.limit);
-        self.n = Wheel::ceil_wheel(self.segment_start);
+        self.n = self.segment_start;
 
         self.sieve_segment();
 
         self
     }
-
-    // Return the first wheel number at least as large as n
-    fn ceil_wheel(n: usize) -> usize {
-        SieveSegment::sieve_segment_start_to_n(SieveSegment::n_to_sieve_segment_start(n))
-    }
-    // Return the dividend a / b, rounded up
-    fn ceil_div(a: usize, b: usize) -> usize {
-        a / b + (a % b != 0) as usize
-    }
 }
 
-struct SieveSegment {
-    sieve: BitVec,
-    sieve_segment_start: usize,
-    sieve_segment_length: usize,
+struct Segment {
+    spokes: [Spoke; Sieve::SPOKE_SIZE],
+    segment_start: usize,
 }
 
-impl SieveSegment {
-    /// Create an unsieved SieveSegment in [start, end).
-    fn new(segment_start: usize, segment_end: usize) -> SieveSegment {
-        let sieve_segment_start = SieveSegment::n_to_sieve_segment_start(segment_start);
-        let sieve_segment_length =
-            SieveSegment::n_to_sieve_segment_start(segment_end) - sieve_segment_start;
-        let sieve = BitVec::new(sieve_segment_length);
+impl Segment {
+    const WHEEL: [usize; Sieve::SPOKE_SIZE] = [
+        1, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101,
+        103, 107, 109, 113, 121, 127, 131, 137, 139, 143, 149, 151, 157, 163, 167, 169, 173, 179,
+        181, 187, 191, 193, 197, 199, 209,
+    ];
+    const SPOKE_GAPS: [usize; Sieve::SPOKE_SIZE] = [
+        10, 2, 4, 2, 4, 6, 2, 6, 4, 2, 4, 6, 6, 2, 6, 4, 2, 6, 4, 6, 8, 4, 2, 4, 2, 4, 8, 6, 4, 6,
+        2, 4, 6, 2, 6, 6, 4, 2, 4, 6, 2, 6, 4, 2, 4, 2, 10, 2,
+    ];
+    const SPOKE: [usize; Sieve::WHEEL_SIZE] = [
+        0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6,
+        7, 7, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 13, 13,
+        13, 13, 13, 13, 14, 14, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 17, 17, 18, 18, 18, 18, 18,
+        18, 19, 19, 19, 19, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22,
+        23, 23, 24, 24, 24, 24, 25, 25, 26, 26, 26, 26, 27, 27, 27, 27, 27, 27, 27, 27, 28, 28, 28,
+        28, 28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 30, 30, 31, 31, 32, 32, 32, 32, 33, 33, 33, 33,
+        33, 33, 34, 34, 35, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36, 37, 37, 37, 37, 38, 38, 39,
+        39, 39, 39, 40, 40, 40, 40, 40, 40, 41, 41, 42, 42, 42, 42, 42, 42, 43, 43, 43, 43, 44, 44,
+        45, 45, 45, 45, 46, 46, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47,
+    ];
 
-        SieveSegment {
-            sieve,
-            sieve_segment_start,
-            sieve_segment_length,
+    /// Create an unsieved Segment in [start, end).
+    fn new(segment_start: usize, segment_end: usize) -> Segment {
+        let spoke_builder = |spoke| Spoke::new(Segment::WHEEL[spoke], segment_start, segment_end);
+        let mut spoke = 0;
+        let spokes = arr![spoke_builder({spoke += 1; spoke - 1}); 48];
+
+        Segment {
+            spokes,
+            segment_start,
         }
     }
 
-    /// Strike multiples of prime in sieve.
-    ///
-    /// Return the next multiple past the end of this SieveSegment.
-    ///
-    /// Note that a step size of p in the sieve corresponds to a step of 2 * p in u64s.
-    fn strike_prime_and_get_next_multiple(&mut self, p: usize, multiple: usize) -> usize {
-        let mut sieve_segment_multiple = self.n_to_sieve(multiple);
-        while sieve_segment_multiple < self.sieve_segment_length {
-            self.sieve.unset(sieve_segment_multiple);
-            sieve_segment_multiple += p;
+    /// Strike primes for all spokes in this segment.
+    fn strike_primes(&mut self, primes: &[usize]) {
+        let mut multiples = arr![Vec::new(); 48];
+        for &p in primes {
+            // Optimize by striking multiples from p^2. Smaller multiples should already have been
+            // struck by previous primes. Also skip ahead to the first spoke in this segment.
+            let factor = cmp::max(p, self.first_wheel_factor(p));
+            let mut multiple = p * factor;
+            let wheel_iter = Segment::SPOKE_GAPS
+                .iter()
+                .cycle()
+                .skip(Segment::spoke(factor))
+                .take(Sieve::SPOKE_SIZE);
+            for spoke_gap in wheel_iter {
+                multiples[Segment::spoke(multiple)].push(multiple);
+                multiple += p * spoke_gap;
+            }
         }
-        self.sieve_to_n(sieve_segment_multiple)
+
+        // Iterate through all primes in all spokes in spoke-major order for cache locality.
+        for (spoke, spoke_multiples) in self.spokes.iter_mut().zip(multiples.iter()) {
+            for (&p, &multiple) in primes.iter().zip(spoke_multiples.iter()) {
+                spoke.strike_prime(p, multiple);
+            }
+        }
     }
 
-    /// Find the next prime at or after n in the sieve.
+    /// Find the next prime at or after n in the segment.
+    ///
+    /// TODO optimize this to O(log k) instead of O(k)
     fn find_prime(&self, n: usize) -> Option<usize> {
-        for sieve_segment_n in self.n_to_sieve(n)..self.sieve_segment_length {
-            if self.sieve.get(sieve_segment_n) {
-                let p = self.sieve_to_n(sieve_segment_n);
+        let mut min_p = None;
+        for spoke in self.spokes.iter() {
+            if let Some(p) = spoke.find_prime(n) {
+                min_p = match min_p {
+                    Some(min_p) if min_p <= p => Some(min_p),
+                    _ => Some(p),
+                }
+            }
+        }
+        min_p
+    }
+
+    fn first_wheel_factor(&self, p: usize) -> usize {
+        let n = ceil_div(self.segment_start, p);
+        (n / Sieve::WHEEL_SIZE) * Sieve::WHEEL_SIZE + Segment::WHEEL[Segment::spoke(n)]
+    }
+    fn spoke(n: usize) -> usize {
+        Segment::SPOKE[n % Sieve::WHEEL_SIZE]
+    }
+}
+
+struct Spoke {
+    sieve: BitVec,
+    residue: usize,
+    spoke_start: usize,
+    spoke_length: usize,
+}
+
+impl Spoke {
+    /// Create an unsieved Spoke in [start, end).
+    fn new(residue: usize, segment_start: usize, segment_end: usize) -> Spoke {
+        let spoke_start = Spoke::n_to_spoke_start(segment_start, residue);
+        let spoke_length = Spoke::n_to_spoke_start(segment_end, residue) - spoke_start;
+        let sieve = BitVec::new(spoke_length);
+
+        Spoke {
+            sieve,
+            residue,
+            spoke_start,
+            spoke_length,
+        }
+    }
+
+    /// Strike multiples of prime in this spoke.
+    ///
+    /// Note that a step size of p in the spoke corresponds to a step of WHEEL_SIZE * p in u64s.
+    fn strike_prime(&mut self, p: usize, multiple: usize) {
+        for spoke_multiple in (self.n_to_spoke(multiple)..self.spoke_length).step_by(p) {
+            self.sieve.unset(spoke_multiple);
+        }
+    }
+
+    /// Find the next prime at or after n in the spoke.
+    fn find_prime(&self, n: usize) -> Option<usize> {
+        for spoke_n in self.n_to_spoke(n)..self.spoke_length {
+            if self.sieve.get(spoke_n) {
+                let p = self.spoke_to_n(spoke_n);
                 return Some(p);
             }
         }
         None
     }
 
-    /// Convert between number space and sieve space.
-    ///
-    /// If n = 2k + 1 is odd, then sieve_to_n(n_to_sieve(n)) = 2k + 1 is an identity, as desired.
-    ///
-    /// But if n = 2k is even, then sieve_to_n(n_to_sieve(n)) = 2k + 1 = n + 1 is not an identity.
-    /// This error is acceptable because primes past 2 are all odd, so:
-    /// - a lower bound of 2k + 1 won't skip any prime candidate.
-    /// - an upper bound of 2k + 1 means 2k - 1 is the last prime candidate. 2k isn't possible.
-    fn n_to_sieve_segment_start(n: usize) -> usize {
-        n / 2
+    /// Convert between number space and spoke space.
+    fn n_to_spoke_start(n: usize, residue: usize) -> usize {
+        n / Sieve::WHEEL_SIZE + (n % Sieve::WHEEL_SIZE > residue) as usize
     }
-    fn sieve_segment_start_to_n(sieve_segment_start_n: usize) -> usize {
-        2 * sieve_segment_start_n + 1
+    fn spoke_start_to_n(spoke_start_n: usize, residue: usize) -> usize {
+        spoke_start_n * Sieve::WHEEL_SIZE + residue
     }
-    fn n_to_sieve(&self, n: usize) -> usize {
-        SieveSegment::n_to_sieve_segment_start(n) - self.sieve_segment_start
+    fn n_to_spoke(&self, n: usize) -> usize {
+        Spoke::n_to_spoke_start(n, self.residue) - self.spoke_start
     }
-    fn sieve_to_n(&self, sieve_n: usize) -> usize {
-        SieveSegment::sieve_segment_start_to_n(sieve_n + self.sieve_segment_start)
+    fn spoke_to_n(&self, spoke_n: usize) -> usize {
+        Spoke::spoke_start_to_n(spoke_n + self.spoke_start, self.residue)
     }
 }
 
@@ -411,7 +492,7 @@ impl BitVec {
     const ONES: u8 = std::u8::MAX;
 
     pub fn new(len: usize) -> BitVec {
-        BitVec(vec![BitVec::ONES; Wheel::ceil_div(len, BitVec::BOOL_BITS)])
+        BitVec(vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)])
     }
 
     pub fn get(&self, index: usize) -> bool {
@@ -421,6 +502,11 @@ impl BitVec {
     pub fn unset(&mut self, index: usize) {
         self.0[index >> BitVec::SHIFT] &= !(1 << (index & BitVec::MASK))
     }
+}
+
+// Return the dividend a / b, rounded up
+fn ceil_div(a: usize, b: usize) -> usize {
+    a / b + (a % b != 0) as usize
 }
 
 #[cfg(test)]
@@ -467,38 +553,49 @@ mod tests {
     }
 
     #[test]
-    fn sieve_segment_correct() {
-        let mut sieve_segment = SieveSegment::new(5, 16);
+    fn segment_correct() {
+        let mut segment = Segment::new(140, 240);
 
         // find_prime() when all true
-        assert_eq!(Some(5), sieve_segment.find_prime(5));
-        assert_eq!(Some(7), sieve_segment.find_prime(7));
-        assert_eq!(Some(9), sieve_segment.find_prime(9));
-        assert_eq!(Some(11), sieve_segment.find_prime(11));
-        assert_eq!(Some(13), sieve_segment.find_prime(13));
-        assert_eq!(Some(15), sieve_segment.find_prime(15));
-        assert_eq!(None, sieve_segment.find_prime(17));
+        assert_eq!(Some(143), segment.find_prime(142));
+        assert_eq!(Some(143), segment.find_prime(143));
+        assert_eq!(Some(149), segment.find_prime(144));
+        assert_eq!(Some(209), segment.find_prime(208));
+        assert_eq!(Some(209), segment.find_prime(209));
+        assert_eq!(Some(211), segment.find_prime(210));
+        assert_eq!(Some(211), segment.find_prime(211));
+        assert_eq!(Some(221), segment.find_prime(212));
+        assert_eq!(Some(239), segment.find_prime(238));
+        assert_eq!(Some(239), segment.find_prime(239));
+        assert_eq!(None, segment.find_prime(240));
+        assert_eq!(None, segment.find_prime(241));
 
-        // strike_prime_and_get_next_multiple()
-        assert_eq!(21, sieve_segment.strike_prime_and_get_next_multiple(3, 9));
-        assert_eq!(25, sieve_segment.strike_prime_and_get_next_multiple(5, 25));
+        // strike_prime()
+        segment.strike_primes(&[11, 13]);
 
         // find_prime() after sieving
-        assert_eq!(Some(5), sieve_segment.find_prime(5));
-        assert_eq!(Some(7), sieve_segment.find_prime(7));
-        assert_eq!(Some(11), sieve_segment.find_prime(9));
-        assert_eq!(Some(13), sieve_segment.find_prime(13));
-        assert_eq!(None, sieve_segment.find_prime(15));
+        assert_eq!(Some(149), segment.find_prime(142));
+        assert_eq!(Some(149), segment.find_prime(143));
+        assert_eq!(Some(149), segment.find_prime(144));
+        assert_eq!(Some(211), segment.find_prime(208));
+        assert_eq!(Some(211), segment.find_prime(209));
+        assert_eq!(Some(211), segment.find_prime(210));
+        assert_eq!(Some(211), segment.find_prime(211));
+        assert_eq!(Some(223), segment.find_prime(212));
+        assert_eq!(Some(239), segment.find_prime(238));
+        assert_eq!(Some(239), segment.find_prime(239));
+        assert_eq!(None, segment.find_prime(240));
+        assert_eq!(None, segment.find_prime(241));
     }
 
     #[test]
-    fn sieve_to_n_to_sieve_correct() {
-        let sieve_segment = SieveSegment::new(5, 10);
-        assert_eq!(5, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(5)));
-        assert_eq!(6, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(6)));
-        assert_eq!(7, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(7)));
-        assert_eq!(8, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(8)));
-        assert_eq!(9, sieve_segment.n_to_sieve(sieve_segment.sieve_to_n(9)));
+    fn spoke_to_n_to_spoke_correct() {
+        let spoke = Spoke::new(13, 20, 50);
+        assert_eq!(5, spoke.n_to_spoke(spoke.spoke_to_n(5)));
+        assert_eq!(6, spoke.n_to_spoke(spoke.spoke_to_n(6)));
+        assert_eq!(7, spoke.n_to_spoke(spoke.spoke_to_n(7)));
+        assert_eq!(8, spoke.n_to_spoke(spoke.spoke_to_n(8)));
+        assert_eq!(9, spoke.n_to_spoke(spoke.spoke_to_n(9)));
     }
 
     #[test]
