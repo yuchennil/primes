@@ -631,6 +631,19 @@ mod tests {
     }
 
     #[bench]
+    fn only_sieve(b: &mut test::Bencher) {
+        b.iter(|| {
+            let mut state = SieveStateMachine::new(1_000_000, 0);
+            loop {
+                if let SieveStateMachine::Done = state {
+                    break;
+                }
+                state.step();
+            }
+        })
+    }
+
+    #[bench]
     fn origin_primes(b: &mut test::Bencher) {
         b.iter(|| Origin::primes(10_000))
     }
