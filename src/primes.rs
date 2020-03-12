@@ -491,15 +491,15 @@ impl BitVec {
     const MASK: usize = 0b111;
     const ONES: u8 = std::u8::MAX;
 
-    pub fn new(len: usize) -> BitVec {
+    fn new(len: usize) -> BitVec {
         BitVec(vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)])
     }
 
-    pub fn get(&self, index: usize) -> bool {
+    fn get(&self, index: usize) -> bool {
         self.0[index >> BitVec::SHIFT] & (1 << (index & BitVec::MASK)) != 0
     }
 
-    pub fn unset(&mut self, index: usize) {
+    fn unset(&mut self, index: usize) {
         self.0[index >> BitVec::SHIFT] &= !(1 << (index & BitVec::MASK))
     }
 }
