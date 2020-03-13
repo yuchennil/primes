@@ -492,7 +492,11 @@ impl BitVec {
     const ONES: u8 = std::u8::MAX;
 
     fn new(len: usize) -> BitVec {
-        BitVec(vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)])
+        let mut bit_vec = vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)];
+        if let Some(end) = bit_vec.get_mut(len >> BitVec::SHIFT) {
+            *end &= !(BitVec::ONES << (len & BitVec::MASK));
+        }
+        BitVec(bit_vec)
     }
 
     fn get(&self, index: usize) -> bool {
@@ -619,6 +623,29 @@ mod tests {
         assert_eq!(true, bit_vec.get(9));
         assert_eq!(true, bit_vec.get(10));
         assert_eq!(false, bit_vec.get(11));
+    }
+
+    #[test]
+    fn bit_vec_bounds() {
+        let bit_vec = BitVec::new(12);
+
+        // Past the end. BitVec does no bounds checking so rustc can inline its methods
+        assert_eq!(false, bit_vec.get(12));
+        assert_eq!(false, bit_vec.get(13));
+        assert_eq!(false, bit_vec.get(14));
+        assert_eq!(false, bit_vec.get(15));
+
+        let bit_vec = BitVec::new(64);
+
+        // Assure the last byte is correct even when it's a multiple of BitVec::BOOL_BITS
+        assert_eq!(true, bit_vec.get(56));
+        assert_eq!(true, bit_vec.get(57));
+        assert_eq!(true, bit_vec.get(58));
+        assert_eq!(true, bit_vec.get(59));
+        assert_eq!(true, bit_vec.get(60));
+        assert_eq!(true, bit_vec.get(61));
+        assert_eq!(true, bit_vec.get(62));
+        assert_eq!(true, bit_vec.get(63));
     }
 
     #[bench]
