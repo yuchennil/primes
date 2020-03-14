@@ -503,23 +503,34 @@ impl BitVec {
             } else {
                 word
             };
-            if let Some(bit_index) = BitVec::find_bit(masked_word) {
+            if let Some(bit_index) = BitVec::find_first_set(masked_word) {
                 return Some(((first_word_index + word_index) << BitVec::SHIFT) + bit_index);
             }
         }
         None
     }
 
-    fn find_bit(word: u8) -> Option<usize> {
+    /// Find the first set bit in word.
+    ///
+    /// This can be optimized with bit twiddling, in three stages:
+    /// 1) map word to single_one_word, which is identical but has only the first set bit
+    /// 2) hash single_one_word to a value in [0, BOOL_BITS)
+    /// 3) look up hash to get the index of the first set bit
+    ///
+    /// Source:
+    /// - http://supertech.csail.mit.edu/papers/debruijn.pdf
+    fn find_first_set(word: u8) -> Option<usize> {
+        const DE_BRUIJN_SEQUENCE: u8 = 0b0001_1101;
+        const DE_BRUIJN_SHIFT: usize = BitVec::BOOL_BITS - BitVec::SHIFT;
+        const DE_BRUIJN_TABLE: [usize; BitVec::BOOL_BITS] = [0, 1, 6, 2, 7, 5, 4, 3];
+
         if word == 0 {
             return None;
         }
-        for bit_index in 0..BitVec::BOOL_BITS {
-            if word & (1 << bit_index) != 0 {
-                return Some(bit_index);
-            }
-        }
-        panic!("word {} is nonzero but has no set bits.", word);
+        let single_one_word = word & (-(word as i16) as u8);
+        let hash =
+            (DE_BRUIJN_SEQUENCE.overflowing_mul(single_one_word).0 >> DE_BRUIJN_SHIFT) as usize;
+        Some(DE_BRUIJN_TABLE[hash])
     }
 
     fn unset(&mut self, index: usize) {
@@ -668,19 +679,19 @@ mod tests {
     }
 
     #[test]
-    fn bit_vec_find_bit() {
-        assert_eq!(None, BitVec::find_bit(0b00000000));
-        assert_eq!(Some(0), BitVec::find_bit(0b00000001));
-        assert_eq!(Some(1), BitVec::find_bit(0b00000010));
-        assert_eq!(Some(2), BitVec::find_bit(0b00000100));
-        assert_eq!(Some(3), BitVec::find_bit(0b00001000));
-        assert_eq!(Some(4), BitVec::find_bit(0b00010000));
-        assert_eq!(Some(5), BitVec::find_bit(0b00100000));
-        assert_eq!(Some(6), BitVec::find_bit(0b01000000));
-        assert_eq!(Some(7), BitVec::find_bit(0b10000000));
+    fn bit_vec_find_first_set() {
+        assert_eq!(None, BitVec::find_first_set(0b00000000));
+        assert_eq!(Some(0), BitVec::find_first_set(0b00000001));
+        assert_eq!(Some(1), BitVec::find_first_set(0b00000010));
+        assert_eq!(Some(2), BitVec::find_first_set(0b00000100));
+        assert_eq!(Some(3), BitVec::find_first_set(0b00001000));
+        assert_eq!(Some(4), BitVec::find_first_set(0b00010000));
+        assert_eq!(Some(5), BitVec::find_first_set(0b00100000));
+        assert_eq!(Some(6), BitVec::find_first_set(0b01000000));
+        assert_eq!(Some(7), BitVec::find_first_set(0b10000000));
 
-        assert_eq!(Some(3), BitVec::find_bit(0b10101000));
-        assert_eq!(Some(4), BitVec::find_bit(0b01010000));
+        assert_eq!(Some(3), BitVec::find_first_set(0b10101000));
+        assert_eq!(Some(4), BitVec::find_first_set(0b01010000));
     }
 
     #[bench]
