@@ -580,29 +580,11 @@ impl BitVec {
     }
 
     /// Find the first set bit in word.
-    ///
-    /// This can be optimized with bit twiddling, in three stages:
-    /// 1) map word to single_one_word, which is identical but has only the first set bit
-    /// 2) hash single_one_word to a value in [0, WORD_BITS)
-    /// 3) look up hash to get the index of the first set bit
-    ///
-    /// Source:
-    /// - http://supertech.csail.mit.edu/papers/debruijn.pdf
     fn find_first_set(word: u32) -> Option<usize> {
-        const DE_BRUIJN_SEQUENCE: u32 = 0x077C_B531;
-        const DE_BRUIJN_SHIFT: usize = BitVec::WORD_BITS - BitVec::SHIFT;
-        const DE_BRUIJN_TABLE: [usize; BitVec::WORD_BITS] = [
-            0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16,
-            7, 26, 12, 18, 6, 11, 5, 10, 9,
-        ];
-
         if word == 0 {
             return None;
         }
-        let single_one_word = word & (-(word as i64) as u32);
-        let hash =
-            (DE_BRUIJN_SEQUENCE.overflowing_mul(single_one_word).0 >> DE_BRUIJN_SHIFT) as usize;
-        Some(DE_BRUIJN_TABLE[hash])
+        Some(word.trailing_zeros() as usize)
     }
 
     fn unset(&mut self, index: usize) {
