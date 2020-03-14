@@ -1,5 +1,6 @@
 use arr_macro::arr;
 use std::cmp;
+use std::collections;
 use std::mem;
 
 /// {2, 3, 5, 7}-wheel segmented sieve of Eratosthenes to generate all primes below a given end
@@ -304,9 +305,7 @@ impl Iterator for Wheel {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let p = self.segment.find_prime(self.start)?;
-        self.start = p + 1;
-        Some(p)
+        self.segment.next()
     }
 }
 
@@ -337,6 +336,19 @@ impl Wheel {
 struct Segment {
     spokes: [Spoke; Sieve::SPOKE_SIZE],
     segment_start: usize,
+    next_prime: collections::BinaryHeap<(cmp::Reverse<usize>, usize)>,
+}
+
+impl Iterator for Segment {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (cmp::Reverse(p), spoke_index) = self.next_prime.pop()?;
+        if let Some(next_p) = self.spokes[spoke_index].find_prime(p + 1) {
+            self.next_prime.push((cmp::Reverse(next_p), spoke_index));
+        }
+        Some(p)
+    }
 }
 
 impl Segment {
@@ -366,10 +378,12 @@ impl Segment {
         let spoke_builder = |spoke| Spoke::new(Segment::WHEEL[spoke], segment_start, segment_end);
         let mut spoke = 0;
         let spokes = arr![spoke_builder({spoke += 1; spoke - 1}); 48];
+        let next_prime = collections::BinaryHeap::new();
 
         Segment {
             spokes,
             segment_start,
+            next_prime,
         }
     }
 
@@ -398,11 +412,16 @@ impl Segment {
                 spoke.strike_prime(p, multiple);
             }
         }
+
+        // Populate the next_primes heap with spokes
+        for (spoke_index, spoke) in self.spokes.iter().enumerate() {
+            if let Some(next_spoke_prime) = spoke.find_prime(self.segment_start) {
+                self.next_prime.push((cmp::Reverse(next_spoke_prime), spoke_index));
+            }
+        }
     }
 
     /// Find the next prime at or after n in the segment.
-    ///
-    /// TODO optimize this to O(log k) instead of O(k)
     fn find_prime(&self, n: usize) -> Option<usize> {
         let mut min_p = None;
         for spoke in self.spokes.iter() {
