@@ -486,11 +486,79 @@ impl BitVec {
     const SHIFT: usize = 5;
     const MASK: usize = 0b11111;
     const ONES: u32 = std::u32::MAX;
+    const UNSET_BIT: [u32; 32] = [
+        !(1 << 0),
+        !(1 << 1),
+        !(1 << 2),
+        !(1 << 3),
+        !(1 << 4),
+        !(1 << 5),
+        !(1 << 6),
+        !(1 << 7),
+        !(1 << 8),
+        !(1 << 9),
+        !(1 << 10),
+        !(1 << 11),
+        !(1 << 12),
+        !(1 << 13),
+        !(1 << 14),
+        !(1 << 15),
+        !(1 << 16),
+        !(1 << 17),
+        !(1 << 18),
+        !(1 << 19),
+        !(1 << 20),
+        !(1 << 21),
+        !(1 << 22),
+        !(1 << 23),
+        !(1 << 24),
+        !(1 << 25),
+        !(1 << 26),
+        !(1 << 27),
+        !(1 << 28),
+        !(1 << 29),
+        !(1 << 30),
+        !(1 << 31),
+    ];
+    const GREATER_OR_EQUAL_BITS: [u32; 32] = [
+        BitVec::ONES << 0,
+        BitVec::ONES << 1,
+        BitVec::ONES << 2,
+        BitVec::ONES << 3,
+        BitVec::ONES << 4,
+        BitVec::ONES << 5,
+        BitVec::ONES << 6,
+        BitVec::ONES << 7,
+        BitVec::ONES << 8,
+        BitVec::ONES << 9,
+        BitVec::ONES << 10,
+        BitVec::ONES << 11,
+        BitVec::ONES << 12,
+        BitVec::ONES << 13,
+        BitVec::ONES << 14,
+        BitVec::ONES << 15,
+        BitVec::ONES << 16,
+        BitVec::ONES << 17,
+        BitVec::ONES << 18,
+        BitVec::ONES << 19,
+        BitVec::ONES << 20,
+        BitVec::ONES << 21,
+        BitVec::ONES << 22,
+        BitVec::ONES << 23,
+        BitVec::ONES << 24,
+        BitVec::ONES << 25,
+        BitVec::ONES << 26,
+        BitVec::ONES << 27,
+        BitVec::ONES << 28,
+        BitVec::ONES << 29,
+        BitVec::ONES << 30,
+        BitVec::ONES << 31,
+    ];
 
     fn new(len: usize) -> BitVec {
         let mut bit_vec = vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)];
         if let Some(end) = bit_vec.get_mut(len >> BitVec::SHIFT) {
-            *end &= !(BitVec::ONES << (len & BitVec::MASK));
+            *end &= !BitVec::GREATER_OR_EQUAL_BITS[len & BitVec::MASK];
         }
         BitVec(bit_vec)
     }
@@ -499,7 +567,7 @@ impl BitVec {
         let first_word_index = index >> BitVec::SHIFT;
         for (word_index, &word) in self.0[first_word_index..].iter().enumerate() {
             let masked_word = if word_index == 0 {
-                word & (BitVec::ONES << (index & BitVec::MASK))
+                word & BitVec::GREATER_OR_EQUAL_BITS[index & BitVec::MASK]
             } else {
                 word
             };
@@ -537,7 +605,7 @@ impl BitVec {
     }
 
     fn unset(&mut self, index: usize) {
-        self.0[index >> BitVec::SHIFT] &= !(1 << (index & BitVec::MASK))
+        self.0[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
     }
 }
 
