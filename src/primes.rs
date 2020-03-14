@@ -270,31 +270,28 @@ impl Origin {
 }
 
 struct Wheel {
-    start: usize,
     end: usize,
     origin_primes: Vec<usize>,
-    segment: Segment,
     segment_start: usize,
     segment_end: usize,
+    segment: Segment,
 }
 
 impl From<Origin> for Wheel {
     fn from(state: Origin) -> Wheel {
-        let start = state.start;
         let end = state.end;
         let origin_primes = state.origin_primes;
 
-        let segment_start = cmp::min(start, end);
+        let segment_start = cmp::min(state.start, end);
         let segment_end = cmp::min(segment_start + Sieve::SEGMENT_LENGTH, end);
         let segment = Segment::new(segment_start, segment_end);
 
         let mut state = Wheel {
-            start,
             end,
             origin_primes,
-            segment,
             segment_start,
             segment_end,
+            segment,
         };
         state.sieve_segment();
         state
@@ -325,7 +322,6 @@ impl Wheel {
     fn advance_segment(mut self) -> Self {
         self.segment_start = self.segment_end;
         self.segment_end = cmp::min(self.segment_start + Sieve::SEGMENT_LENGTH, self.end);
-        self.start = self.segment_start;
 
         self.sieve_segment();
 
@@ -416,7 +412,8 @@ impl Segment {
         // Populate the next_primes heap with spokes
         for (spoke_index, spoke) in self.spokes.iter().enumerate() {
             if let Some(next_spoke_prime) = spoke.find_prime(self.segment_start) {
-                self.next_prime.push((cmp::Reverse(next_spoke_prime), spoke_index));
+                self.next_prime
+                    .push((cmp::Reverse(next_spoke_prime), spoke_index));
             }
         }
     }
