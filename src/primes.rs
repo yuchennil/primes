@@ -483,7 +483,7 @@ struct BitVec(Vec<u64>);
 impl BitVec {
     const WORD_BITS: usize = 64;
     const SHIFT: usize = 6;
-    const MASK: usize = 0b111111;
+    const MASK: usize = 0b11_1111;
     const ONES: u64 = std::u64::MAX;
     const UNSET_BIT: [u64; 64] = [
         !(1 << 0),
