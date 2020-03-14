@@ -479,13 +479,13 @@ impl Spoke {
     }
 }
 
-struct BitVec(Vec<u8>);
+struct BitVec(Vec<u32>);
 
 impl BitVec {
-    const BOOL_BITS: usize = 8;
-    const SHIFT: usize = 3;
-    const MASK: usize = 0b111;
-    const ONES: u8 = std::u8::MAX;
+    const BOOL_BITS: usize = 32;
+    const SHIFT: usize = 5;
+    const MASK: usize = 0b11111;
+    const ONES: u32 = std::u32::MAX;
 
     fn new(len: usize) -> BitVec {
         let mut bit_vec = vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)];
@@ -519,15 +519,18 @@ impl BitVec {
     ///
     /// Source:
     /// - http://supertech.csail.mit.edu/papers/debruijn.pdf
-    fn find_first_set(word: u8) -> Option<usize> {
-        const DE_BRUIJN_SEQUENCE: u8 = 0b0001_1101;
+    fn find_first_set(word: u32) -> Option<usize> {
+        const DE_BRUIJN_SEQUENCE: u32 = 0x077C_B531;
         const DE_BRUIJN_SHIFT: usize = BitVec::BOOL_BITS - BitVec::SHIFT;
-        const DE_BRUIJN_TABLE: [usize; BitVec::BOOL_BITS] = [0, 1, 6, 2, 7, 5, 4, 3];
+        const DE_BRUIJN_TABLE: [usize; BitVec::BOOL_BITS] = [
+            0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16,
+            7, 26, 12, 18, 6, 11, 5, 10, 9,
+        ];
 
         if word == 0 {
             return None;
         }
-        let single_one_word = word & (-(word as i16) as u8);
+        let single_one_word = word & (-(word as i64) as u32);
         let hash =
             (DE_BRUIJN_SEQUENCE.overflowing_mul(single_one_word).0 >> DE_BRUIJN_SHIFT) as usize;
         Some(DE_BRUIJN_TABLE[hash])
