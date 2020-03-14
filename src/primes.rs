@@ -44,7 +44,8 @@ impl Sieve {
     const SPOKE_SIZE: usize = 48;
     const WHEEL_SIZE: usize = 210;
     const L1_CACHE_BYTES: usize = 32_768;
-    const SEGMENT_LENGTH: usize = Sieve::WHEEL_SIZE * Sieve::L1_CACHE_BYTES * BitVec::BOOL_BITS;
+    const BITS_PER_BOOL: usize = 8;
+    const SEGMENT_LENGTH: usize = Sieve::WHEEL_SIZE * Sieve::L1_CACHE_BYTES * Sieve::BITS_PER_BOOL;
 
     pub fn segmented(limit: u64) -> Sieve {
         Sieve::range(0, limit)
@@ -482,7 +483,7 @@ impl Spoke {
 struct BitVec(Vec<u32>);
 
 impl BitVec {
-    const BOOL_BITS: usize = 32;
+    const WORD_BITS: usize = 32;
     const SHIFT: usize = 5;
     const MASK: usize = 0b11111;
     const ONES: u32 = std::u32::MAX;
@@ -556,7 +557,7 @@ impl BitVec {
     ];
 
     fn new(len: usize) -> BitVec {
-        let mut bit_vec = vec![BitVec::ONES; ceil_div(len, BitVec::BOOL_BITS)];
+        let mut bit_vec = vec![BitVec::ONES; ceil_div(len, BitVec::WORD_BITS)];
         if let Some(end) = bit_vec.get_mut(len >> BitVec::SHIFT) {
             *end &= !BitVec::GREATER_OR_EQUAL_BITS[len & BitVec::MASK];
         }
@@ -582,15 +583,15 @@ impl BitVec {
     ///
     /// This can be optimized with bit twiddling, in three stages:
     /// 1) map word to single_one_word, which is identical but has only the first set bit
-    /// 2) hash single_one_word to a value in [0, BOOL_BITS)
+    /// 2) hash single_one_word to a value in [0, WORD_BITS)
     /// 3) look up hash to get the index of the first set bit
     ///
     /// Source:
     /// - http://supertech.csail.mit.edu/papers/debruijn.pdf
     fn find_first_set(word: u32) -> Option<usize> {
         const DE_BRUIJN_SEQUENCE: u32 = 0x077C_B531;
-        const DE_BRUIJN_SHIFT: usize = BitVec::BOOL_BITS - BitVec::SHIFT;
-        const DE_BRUIJN_TABLE: [usize; BitVec::BOOL_BITS] = [
+        const DE_BRUIJN_SHIFT: usize = BitVec::WORD_BITS - BitVec::SHIFT;
+        const DE_BRUIJN_TABLE: [usize; BitVec::WORD_BITS] = [
             0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16,
             7, 26, 12, 18, 6, 11, 5, 10, 9,
         ];
@@ -738,7 +739,7 @@ mod tests {
 
         let bit_vec = BitVec::new(64);
 
-        // Assure the last byte is correct even when it's a multiple of BitVec::BOOL_BITS
+        // Assure the last byte is correct even when it's a multiple of BitVec::WORD_BITS
         assert_eq!(Some(56), bit_vec.find(56));
         assert_eq!(Some(57), bit_vec.find(57));
         assert_eq!(Some(58), bit_vec.find(58));
