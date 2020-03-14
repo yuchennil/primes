@@ -480,14 +480,14 @@ impl Spoke {
     }
 }
 
-struct BitVec(Vec<u32>);
+struct BitVec(Vec<u64>);
 
 impl BitVec {
-    const WORD_BITS: usize = 32;
-    const SHIFT: usize = 5;
-    const MASK: usize = 0b11111;
-    const ONES: u32 = std::u32::MAX;
-    const UNSET_BIT: [u32; 32] = [
+    const WORD_BITS: usize = 64;
+    const SHIFT: usize = 6;
+    const MASK: usize = 0b111111;
+    const ONES: u64 = std::u64::MAX;
+    const UNSET_BIT: [u64; 64] = [
         !(1 << 0),
         !(1 << 1),
         !(1 << 2),
@@ -520,8 +520,40 @@ impl BitVec {
         !(1 << 29),
         !(1 << 30),
         !(1 << 31),
+        !(1 << 32),
+        !(1 << 33),
+        !(1 << 34),
+        !(1 << 35),
+        !(1 << 36),
+        !(1 << 37),
+        !(1 << 38),
+        !(1 << 39),
+        !(1 << 40),
+        !(1 << 41),
+        !(1 << 42),
+        !(1 << 43),
+        !(1 << 44),
+        !(1 << 45),
+        !(1 << 46),
+        !(1 << 47),
+        !(1 << 48),
+        !(1 << 49),
+        !(1 << 50),
+        !(1 << 51),
+        !(1 << 52),
+        !(1 << 53),
+        !(1 << 54),
+        !(1 << 55),
+        !(1 << 56),
+        !(1 << 57),
+        !(1 << 58),
+        !(1 << 59),
+        !(1 << 60),
+        !(1 << 61),
+        !(1 << 62),
+        !(1 << 63),
     ];
-    const GREATER_OR_EQUAL_BITS: [u32; 32] = [
+    const GREATER_OR_EQUAL_BITS: [u64; 64] = [
         BitVec::ONES << 0,
         BitVec::ONES << 1,
         BitVec::ONES << 2,
@@ -554,6 +586,38 @@ impl BitVec {
         BitVec::ONES << 29,
         BitVec::ONES << 30,
         BitVec::ONES << 31,
+        BitVec::ONES << 32,
+        BitVec::ONES << 33,
+        BitVec::ONES << 34,
+        BitVec::ONES << 35,
+        BitVec::ONES << 36,
+        BitVec::ONES << 37,
+        BitVec::ONES << 38,
+        BitVec::ONES << 39,
+        BitVec::ONES << 40,
+        BitVec::ONES << 41,
+        BitVec::ONES << 42,
+        BitVec::ONES << 43,
+        BitVec::ONES << 44,
+        BitVec::ONES << 45,
+        BitVec::ONES << 46,
+        BitVec::ONES << 47,
+        BitVec::ONES << 48,
+        BitVec::ONES << 49,
+        BitVec::ONES << 50,
+        BitVec::ONES << 51,
+        BitVec::ONES << 52,
+        BitVec::ONES << 53,
+        BitVec::ONES << 54,
+        BitVec::ONES << 55,
+        BitVec::ONES << 56,
+        BitVec::ONES << 57,
+        BitVec::ONES << 58,
+        BitVec::ONES << 59,
+        BitVec::ONES << 60,
+        BitVec::ONES << 61,
+        BitVec::ONES << 62,
+        BitVec::ONES << 63,
     ];
 
     fn new(len: usize) -> BitVec {
@@ -580,7 +644,7 @@ impl BitVec {
     }
 
     /// Find the first set bit in word.
-    fn find_first_set(word: u32) -> Option<usize> {
+    fn find_first_set(word: u64) -> Option<usize> {
         if word == 0 {
             return None;
         }
