@@ -458,15 +458,13 @@ struct Spoke {
     residue: usize,
     spoke_start: usize,
     spoke_length: usize,
-    spoke_n: usize,
 }
 
 impl Iterator for Spoke {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let spoke_p = self.sieve.find(self.spoke_n)?;
-        self.spoke_n = spoke_p + 1;
+        let spoke_p = self.sieve.next()?;
         Some(self.spoke_to_n(spoke_p))
     }
 }
@@ -477,14 +475,12 @@ impl Spoke {
         let spoke_start = Spoke::n_to_spoke_start(segment_start, residue);
         let spoke_length = Spoke::n_to_spoke_start(segment_end, residue) - spoke_start;
         let sieve = BitVec::new(spoke_length);
-        let spoke_n = 0;
 
         Spoke {
             sieve,
             residue,
             spoke_start,
             spoke_length,
-            spoke_n,
         }
     }
 
@@ -519,7 +515,37 @@ impl Spoke {
     }
 }
 
-struct BitVec(Vec<u64>);
+struct BitVec {
+    bit_vec: Vec<u64>,
+    word_index: usize,
+    bit_index: usize,
+}
+
+impl Iterator for BitVec {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let word = self.bit_vec.get(self.word_index)?;
+            let masked_word = word & BitVec::GREATER_OR_EQUAL_BITS[self.bit_index];
+            match BitVec::find_first_set(masked_word) {
+                Some(bit_index) => {
+                    let result = (self.word_index << BitVec::SHIFT) + bit_index;
+                    self.bit_index = bit_index + 1;
+                    if self.bit_index == BitVec::WORD_BITS {
+                        self.word_index += 1;
+                        self.bit_index = 0;
+                    }
+                    return Some(result);
+                }
+                None => {
+                    self.word_index += 1;
+                    self.bit_index = 0;
+                }
+            }
+        }
+    }
+}
 
 impl BitVec {
     const WORD_BITS: usize = 64;
@@ -664,12 +690,19 @@ impl BitVec {
         if let Some(end) = bit_vec.get_mut(len >> BitVec::SHIFT) {
             *end &= !BitVec::GREATER_OR_EQUAL_BITS[len & BitVec::MASK];
         }
-        BitVec(bit_vec)
+        let word_index = 0;
+        let bit_index = 0;
+
+        BitVec {
+            bit_vec,
+            word_index,
+            bit_index,
+        }
     }
 
     fn find(&self, index: usize) -> Option<usize> {
         let first_word_index = index >> BitVec::SHIFT;
-        for (word_index, &word) in self.0[first_word_index..].iter().enumerate() {
+        for (word_index, &word) in self.bit_vec[first_word_index..].iter().enumerate() {
             let masked_word = if word_index == 0 {
                 word & BitVec::GREATER_OR_EQUAL_BITS[index & BitVec::MASK]
             } else {
@@ -691,7 +724,7 @@ impl BitVec {
     }
 
     fn unset(&mut self, index: usize) {
-        self.0[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
+        self.bit_vec[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
     }
 }
 
