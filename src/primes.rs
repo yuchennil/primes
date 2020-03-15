@@ -2,6 +2,7 @@ use arr_macro::arr;
 use std::cmp;
 use std::collections;
 use std::mem;
+use std::ops;
 
 /// {2, 3, 5, 7}-wheel segmented sieve of Eratosthenes to generate all primes below a given end
 ///
@@ -153,26 +154,21 @@ impl SieveStateMachine {
 struct Basis {
     start: usize,
     end: usize,
-    basis_primes_index: usize,
+    basis_primes_index_iter: ops::Range<usize>,
 }
 
 impl Iterator for Basis {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match Sieve::BASIS_PRIMES.get(self.basis_primes_index) {
-            Some(&p) if p < self.end => {
-                self.basis_primes_index += 1;
-                Some(p)
-            }
-            _ => None,
-        }
+        let basis_primes_index = self.basis_primes_index_iter.next()?;
+        Some(Sieve::BASIS_PRIMES[basis_primes_index])
     }
 }
 
 impl Basis {
     fn new(start: usize, end: usize) -> Basis {
-        let basis_primes_index = Basis::primes_index(start);
+        let basis_primes_index_iter = Basis::primes_index(start)..Basis::primes_index(end);
 
         // Advance start to FIRST_NON_BASIS_PRIME so it will be correct when passed to Origin.
         let start = cmp::max(start, Sieve::FIRST_NON_BASIS_PRIME);
@@ -180,7 +176,7 @@ impl Basis {
         Basis {
             start,
             end,
-            basis_primes_index,
+            basis_primes_index_iter,
         }
     }
 
@@ -201,16 +197,15 @@ struct Origin {
     start: usize,
     end: usize,
     origin_primes: Vec<usize>,
-    origin_primes_index: usize,
+    origin_primes_index_iter: ops::Range<usize>,
 }
 
 impl Iterator for Origin {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let p = *self.origin_primes.get(self.origin_primes_index)?;
-        self.origin_primes_index += 1;
-        Some(p)
+        let origin_primes_index = self.origin_primes_index_iter.next()?;
+        Some(self.origin_primes[origin_primes_index])
     }
 }
 
@@ -221,7 +216,8 @@ impl From<Basis> for Origin {
 
         let origin_end = Origin::end(end);
         let origin_primes = Origin::primes(origin_end);
-        let origin_primes_index = Origin::primes_index(start, origin_end, &origin_primes);
+        let origin_primes_index_iter =
+            Origin::primes_index(start, origin_end, &origin_primes)..origin_primes.len();
 
         // Advance start to origin_end so it will be correct when passed to Wheel.
         let start = cmp::max(start, origin_end);
@@ -230,7 +226,7 @@ impl From<Basis> for Origin {
             start,
             end,
             origin_primes,
-            origin_primes_index,
+            origin_primes_index_iter,
         }
     }
 }
