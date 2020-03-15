@@ -309,6 +309,7 @@ impl Wheel {
     fn sieve_segment(&mut self) {
         self.segment = Segment::new(self.segment_start, self.segment_end);
         self.segment.strike_primes(&self.origin_primes);
+        self.segment.initialize_iterator();
     }
 
     // Was this the last segment to sieve?
@@ -412,8 +413,10 @@ impl Segment {
                 spoke.strike_prime(p, multiple);
             }
         }
+    }
 
-        // Populate the next_primes heap with spokes
+    // Populate the next_primes heap with the first primes of each spoke
+    fn initialize_iterator(&mut self) {
         for (spoke_index, spoke) in self.spokes.iter().enumerate() {
             if let Some(next_spoke_prime) = spoke.find_prime(self.segment_start) {
                 self.next_prime
