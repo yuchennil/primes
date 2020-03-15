@@ -337,7 +337,7 @@ impl Iterator for Segment {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (cmp::Reverse(p), spoke_index) = self.next_prime.pop()?;
-        if let Some(next_p) = self.spokes[spoke_index].find_prime(p + 1) {
+        if let Some(next_p) = self.spokes[spoke_index].next() {
             self.next_prime.push((cmp::Reverse(next_p), spoke_index));
         }
         Some(p)
@@ -415,8 +415,8 @@ impl Segment {
 
     // Populate the next_primes heap with the first primes of each spoke
     fn initialize_iterator(&mut self) {
-        for (spoke_index, spoke) in self.spokes.iter().enumerate() {
-            if let Some(next_spoke_prime) = spoke.find_prime(self.segment_start) {
+        for (spoke_index, spoke) in self.spokes.iter_mut().enumerate() {
+            if let Some(next_spoke_prime) = spoke.next() {
                 self.next_prime
                     .push((cmp::Reverse(next_spoke_prime), spoke_index));
             }
@@ -458,6 +458,17 @@ struct Spoke {
     residue: usize,
     spoke_start: usize,
     spoke_length: usize,
+    spoke_n: usize,
+}
+
+impl Iterator for Spoke {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let spoke_p = self.sieve.find(self.spoke_n)?;
+        self.spoke_n = spoke_p + 1;
+        Some(self.spoke_to_n(spoke_p))
+    }
 }
 
 impl Spoke {
@@ -466,12 +477,14 @@ impl Spoke {
         let spoke_start = Spoke::n_to_spoke_start(segment_start, residue);
         let spoke_length = Spoke::n_to_spoke_start(segment_end, residue) - spoke_start;
         let sieve = BitVec::new(spoke_length);
+        let spoke_n = 0;
 
         Spoke {
             sieve,
             residue,
             spoke_start,
             spoke_length,
+            spoke_n,
         }
     }
 
