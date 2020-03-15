@@ -246,7 +246,9 @@ impl Origin {
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while let Some(p) = segment.find_prime(n) {
             origin_primes.push(p);
-            segment.strike_origin_prime(p);
+            if p * p < origin_end {
+                segment.strike_origin_prime(p);
+            }
             n = p + 1;
         }
         origin_primes
