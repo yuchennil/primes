@@ -246,7 +246,7 @@ impl Origin {
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
         while let Some(p) = segment.find_prime(n) {
             origin_primes.push(p);
-            segment.strike_primes(&[p]);
+            segment.strike_origin_prime(p);
             n = p + 1;
         }
         origin_primes
@@ -376,6 +376,21 @@ impl Segment {
             spokes,
             segment_start,
             next_prime,
+        }
+    }
+
+    /// Strike p for all spokes in the origin segment.
+    fn strike_origin_prime(&mut self, p: usize) {
+        let factor = p;
+        let mut multiple = p * factor;
+        let wheel_iter = Segment::SPOKE_GAPS
+            .iter()
+            .cycle()
+            .skip(Segment::spoke(factor))
+            .take(Sieve::SPOKE_SIZE);
+        for spoke_gap in wheel_iter {
+            self.spokes[Segment::spoke(multiple)].strike_prime(p, multiple);
+            multiple += p * spoke_gap;
         }
     }
 
