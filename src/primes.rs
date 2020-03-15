@@ -54,11 +54,8 @@ impl Sieve {
     }
 
     pub fn range(start: u64, end: u64) -> Sieve {
-        let start = start as usize;
-        let end = end as usize;
-
         Sieve {
-            state_machine: SieveStateMachine::new(start, end),
+            state_machine: SieveStateMachine::new(start as usize, end as usize),
         }
     }
 }
@@ -238,6 +235,7 @@ impl Origin {
     fn end(end: usize) -> usize {
         (end as f64).sqrt().ceil() as usize
     }
+
     /// Sieve an origin segment [0, origin_end) using Eratosthenes, skipping non-wheel numbers.
     fn primes(origin_end: usize) -> Vec<usize> {
         let mut origin_primes = Vec::new();
@@ -329,8 +327,8 @@ impl Wheel {
 }
 
 struct Segment {
-    spokes: [Spoke; Sieve::SPOKE_SIZE],
     segment_start: usize,
+    spokes: [Spoke; Sieve::SPOKE_SIZE],
     next_prime: collections::BinaryHeap<(cmp::Reverse<usize>, usize)>,
 }
 
@@ -376,8 +374,8 @@ impl Segment {
         let next_prime = collections::BinaryHeap::new();
 
         Segment {
-            spokes,
             segment_start,
+            spokes,
             next_prime,
         }
     }
@@ -671,7 +669,7 @@ impl BitVec {
         None
     }
 
-    /// Find the first set bit in word.
+    /// Find the first set bit in word. This index is equal to the number of word's trailing zeros.
     fn find_first_set(word: u64) -> Option<usize> {
         if word == 0 {
             return None;
