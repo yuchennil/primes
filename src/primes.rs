@@ -381,7 +381,7 @@ impl Segment {
 
     /// Strike primes for all spokes in this segment.
     fn strike_primes(&mut self, primes: &[usize]) {
-        let mut multiples = arr![Vec::new(); 48];
+        let mut multiples = arr![Vec::with_capacity(primes.len()); 48];
         for &p in primes {
             // Optimize by striking multiples from p^2. Smaller multiples should already have been
             // struck by previous primes. Also skip ahead to the first spoke in this segment.
