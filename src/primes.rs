@@ -383,14 +383,11 @@ impl Segment {
 
     /// Strike p for all spokes in the origin segment.
     fn strike_origin_prime(&mut self, p: usize) {
+        // Optimize by striking multiples from p^2. Smaller multiples should already have been
+        // struck by previous primes.
         let factor = p;
         let mut multiple = p * factor;
-        let wheel_iter = Segment::SPOKE_GAPS
-            .iter()
-            .cycle()
-            .skip(Segment::spoke(factor))
-            .take(Sieve::SPOKE_SIZE);
-        for spoke_gap in wheel_iter {
+        for spoke_gap in Segment::wheel_iter(factor) {
             self.spokes[Segment::spoke(multiple)].strike_prime(p, multiple);
             multiple += p * spoke_gap;
         }
@@ -400,16 +397,10 @@ impl Segment {
     fn strike_primes(&mut self, primes: &[usize]) {
         let mut multiples = arr![Vec::with_capacity(primes.len()); 48];
         for &p in primes {
-            // Optimize by striking multiples from p^2. Smaller multiples should already have been
-            // struck by previous primes. Also skip ahead to the first spoke in this segment.
+            // Start at p^2, or skip ahead to the first spoke in this segment.
             let factor = cmp::max(p, self.first_wheel_factor(p));
             let mut multiple = p * factor;
-            let wheel_iter = Segment::SPOKE_GAPS
-                .iter()
-                .cycle()
-                .skip(Segment::spoke(factor))
-                .take(Sieve::SPOKE_SIZE);
-            for spoke_gap in wheel_iter {
+            for spoke_gap in Segment::wheel_iter(factor) {
                 multiples[Segment::spoke(multiple)].push(multiple);
                 multiple += p * spoke_gap;
             }
@@ -451,6 +442,13 @@ impl Segment {
     }
     fn spoke(n: usize) -> usize {
         Segment::SPOKE[n % Sieve::WHEEL_SIZE]
+    }
+    fn wheel_iter(factor: usize) -> impl Iterator<Item = &'static usize> {
+        Segment::SPOKE_GAPS
+            .iter()
+            .cycle()
+            .skip(Segment::spoke(factor))
+            .take(Sieve::SPOKE_SIZE)
     }
 }
 
