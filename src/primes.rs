@@ -838,7 +838,7 @@ mod tests {
     #[bench]
     fn only_sieve(b: &mut test::Bencher) {
         b.iter(|| {
-            let mut state = SieveStateMachine::new(1_000_000, 0);
+            let mut state = SieveStateMachine::new(0, 1_000_000);
             loop {
                 if let SieveStateMachine::Done = state {
                     break;
@@ -855,7 +855,7 @@ mod tests {
 
     #[bench]
     fn wheel_segment(b: &mut test::Bencher) {
-        let mut state = SieveStateMachine::new(10_usize.pow(10), 9_876_543_210);
+        let mut state = SieveStateMachine::new(9_876_543_210, 10_usize.pow(10));
         state.step();
         state.step();
         if let SieveStateMachine::Wheel(mut wheel) = state {
