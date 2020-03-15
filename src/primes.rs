@@ -244,7 +244,7 @@ impl Origin {
 
         let mut segment = Segment::new(0, origin_end);
         let mut n = Sieve::FIRST_NON_BASIS_PRIME;
-        while let Some(p) = segment.find_prime(n) {
+        while let Some(p) = segment.find_origin_prime(n) {
             origin_primes.push(p);
             if p * p < origin_end {
                 segment.strike_origin_prime(p);
@@ -308,7 +308,7 @@ impl Wheel {
     /// Sieve a segment [start, end) based on an origin segment.
     fn sieve_segment(&mut self) {
         self.segment = Segment::new(self.segment_start, self.segment_end);
-        self.segment.strike_primes(&self.origin_primes);
+        self.segment.strike_wheel_primes(&self.origin_primes);
         self.segment.initialize_iterator();
     }
 
@@ -395,7 +395,7 @@ impl Segment {
     }
 
     /// Strike primes for all spokes in this segment.
-    fn strike_primes(&mut self, primes: &[usize]) {
+    fn strike_wheel_primes(&mut self, primes: &[usize]) {
         let mut multiples = arr![Vec::with_capacity(primes.len()); 48];
         for &p in primes {
             // Start at p^2, or skip ahead to the first spoke in this segment.
@@ -426,7 +426,7 @@ impl Segment {
     }
 
     /// Find the next prime at or after n in the segment.
-    fn find_prime(&self, n: usize) -> Option<usize> {
+    fn find_origin_prime(&self, n: usize) -> Option<usize> {
         let mut min_p = None;
         for spoke in self.spokes.iter() {
             if let Some(p) = spoke.find_prime(n) {
@@ -736,36 +736,36 @@ mod tests {
     fn segment_correct() {
         let mut segment = Segment::new(140, 240);
 
-        // find_prime() when all true
-        assert_eq!(Some(143), segment.find_prime(142));
-        assert_eq!(Some(143), segment.find_prime(143));
-        assert_eq!(Some(149), segment.find_prime(144));
-        assert_eq!(Some(209), segment.find_prime(208));
-        assert_eq!(Some(209), segment.find_prime(209));
-        assert_eq!(Some(211), segment.find_prime(210));
-        assert_eq!(Some(211), segment.find_prime(211));
-        assert_eq!(Some(221), segment.find_prime(212));
-        assert_eq!(Some(239), segment.find_prime(238));
-        assert_eq!(Some(239), segment.find_prime(239));
-        assert_eq!(None, segment.find_prime(240));
-        assert_eq!(None, segment.find_prime(241));
+        // find_origin_prime() when all true
+        assert_eq!(Some(143), segment.find_origin_prime(142));
+        assert_eq!(Some(143), segment.find_origin_prime(143));
+        assert_eq!(Some(149), segment.find_origin_prime(144));
+        assert_eq!(Some(209), segment.find_origin_prime(208));
+        assert_eq!(Some(209), segment.find_origin_prime(209));
+        assert_eq!(Some(211), segment.find_origin_prime(210));
+        assert_eq!(Some(211), segment.find_origin_prime(211));
+        assert_eq!(Some(221), segment.find_origin_prime(212));
+        assert_eq!(Some(239), segment.find_origin_prime(238));
+        assert_eq!(Some(239), segment.find_origin_prime(239));
+        assert_eq!(None, segment.find_origin_prime(240));
+        assert_eq!(None, segment.find_origin_prime(241));
 
-        // strike_prime()
-        segment.strike_primes(&[11, 13]);
+        // strike_wheel_primes()
+        segment.strike_wheel_primes(&[11, 13]);
 
-        // find_prime() after sieving
-        assert_eq!(Some(149), segment.find_prime(142));
-        assert_eq!(Some(149), segment.find_prime(143));
-        assert_eq!(Some(149), segment.find_prime(144));
-        assert_eq!(Some(211), segment.find_prime(208));
-        assert_eq!(Some(211), segment.find_prime(209));
-        assert_eq!(Some(211), segment.find_prime(210));
-        assert_eq!(Some(211), segment.find_prime(211));
-        assert_eq!(Some(223), segment.find_prime(212));
-        assert_eq!(Some(239), segment.find_prime(238));
-        assert_eq!(Some(239), segment.find_prime(239));
-        assert_eq!(None, segment.find_prime(240));
-        assert_eq!(None, segment.find_prime(241));
+        // find_origin_prime() after sieving
+        assert_eq!(Some(149), segment.find_origin_prime(142));
+        assert_eq!(Some(149), segment.find_origin_prime(143));
+        assert_eq!(Some(149), segment.find_origin_prime(144));
+        assert_eq!(Some(211), segment.find_origin_prime(208));
+        assert_eq!(Some(211), segment.find_origin_prime(209));
+        assert_eq!(Some(211), segment.find_origin_prime(210));
+        assert_eq!(Some(211), segment.find_origin_prime(211));
+        assert_eq!(Some(223), segment.find_origin_prime(212));
+        assert_eq!(Some(239), segment.find_origin_prime(238));
+        assert_eq!(Some(239), segment.find_origin_prime(239));
+        assert_eq!(None, segment.find_origin_prime(240));
+        assert_eq!(None, segment.find_origin_prime(241));
     }
 
     #[test]
