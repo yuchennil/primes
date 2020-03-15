@@ -441,15 +441,15 @@ impl Segment {
         let n = ceil_div(self.segment_start, p);
         (n / Sieve::WHEEL_SIZE) * Sieve::WHEEL_SIZE + Segment::WHEEL[Segment::spoke(n)]
     }
-    fn spoke(n: usize) -> usize {
-        Segment::SPOKE[n % Sieve::WHEEL_SIZE]
-    }
     fn wheel_iter(factor: usize) -> impl Iterator<Item = &'static usize> {
         Segment::SPOKE_GAPS
             .iter()
             .cycle()
             .skip(Segment::spoke(factor))
             .take(Sieve::SPOKE_SIZE)
+    }
+    fn spoke(n: usize) -> usize {
+        Segment::SPOKE[n % Sieve::WHEEL_SIZE]
     }
 }
 
@@ -700,6 +700,18 @@ impl BitVec {
         }
     }
 
+    fn unset(&mut self, index: usize) {
+        self.bit_vec[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
+    }
+
+    /// Find the first set bit in word. This index is equal to the number of word's trailing zeros.
+    fn find_first_set(word: u64) -> Option<usize> {
+        if word == 0 {
+            return None;
+        }
+        Some(word.trailing_zeros() as usize)
+    }
+
     fn find(&self, index: usize) -> Option<usize> {
         let first_word_index = index >> BitVec::SHIFT;
         for (word_index, &word) in self.bit_vec[first_word_index..].iter().enumerate() {
@@ -713,18 +725,6 @@ impl BitVec {
             }
         }
         None
-    }
-
-    /// Find the first set bit in word. This index is equal to the number of word's trailing zeros.
-    fn find_first_set(word: u64) -> Option<usize> {
-        if word == 0 {
-            return None;
-        }
-        Some(word.trailing_zeros() as usize)
-    }
-
-    fn unset(&mut self, index: usize) {
-        self.bit_vec[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
     }
 }
 
