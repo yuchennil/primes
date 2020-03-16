@@ -275,8 +275,9 @@ impl Iterator for OriginSegment {
     /// Find the next prime at or after n in the segment.
     fn next(&mut self) -> Option<Self::Item> {
         let mut option_min_p = None;
-        for spoke in self.segment.spokes.iter() {
-            if let Some(p) = spoke.find_prime(self.n) {
+        for spoke in self.segment.spokes.iter_mut() {
+            spoke.skip_to(self.n);
+            if let Some(p) = spoke.next() {
                 option_min_p = match option_min_p {
                     Some(min_p) if min_p <= p => option_min_p,
                     _ => Some(p),
@@ -517,11 +518,10 @@ impl Spoke {
         }
     }
 
-    /// Find the next prime at or after n in the spoke.
-    fn find_prime(&self, n: usize) -> Option<usize> {
+    /// Skip the spoke iterator forward to n.
+    fn skip_to(&mut self, n: usize) {
         let spoke_n = self.n_to_spoke(n);
-        let spoke_p = self.sieve.find(spoke_n)?;
-        Some(self.spoke_to_n(spoke_p))
+        self.sieve.skip_to(spoke_n);
     }
 
     /// Convert between number space and spoke space.
@@ -728,27 +728,17 @@ impl BitVec {
         self.bit_vec[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
     }
 
+    fn skip_to(&mut self, index: usize) {
+        self.word_index = index >> BitVec::SHIFT;
+        self.bit_index = index & BitVec::MASK;
+    }
+
     /// Find the first set bit in word. This index is equal to the number of word's trailing zeros.
     fn find_first_set(word: u64) -> Option<usize> {
         if word == 0 {
             return None;
         }
         Some(word.trailing_zeros() as usize)
-    }
-
-    fn find(&self, index: usize) -> Option<usize> {
-        let first_word_index = index >> BitVec::SHIFT;
-        for (word_index, &word) in self.bit_vec[first_word_index..].iter().enumerate() {
-            let masked_word = if word_index == 0 {
-                word & BitVec::GREATER_OR_EQUAL_BITS[index & BitVec::MASK]
-            } else {
-                word
-            };
-            if let Some(bit_index) = BitVec::find_first_set(masked_word) {
-                return Some(((first_word_index + word_index) << BitVec::SHIFT) + bit_index);
-            }
-        }
-        None
     }
 }
 
@@ -859,41 +849,17 @@ mod tests {
         bit_vec.unset(5);
         bit_vec.unset(7);
         bit_vec.unset(11);
-        assert_eq!(Some(0), bit_vec.find(0));
-        assert_eq!(Some(1), bit_vec.find(1));
-        assert_eq!(Some(4), bit_vec.find(2));
-        assert_eq!(Some(4), bit_vec.find(3));
-        assert_eq!(Some(4), bit_vec.find(4));
-        assert_eq!(Some(6), bit_vec.find(5));
-        assert_eq!(Some(6), bit_vec.find(6));
-        assert_eq!(Some(8), bit_vec.find(7));
-        assert_eq!(Some(8), bit_vec.find(8));
-        assert_eq!(Some(9), bit_vec.find(9));
-        assert_eq!(Some(10), bit_vec.find(10));
-        assert_eq!(None, bit_vec.find(11));
+
+        assert_eq!(vec![0, 1, 4, 6, 8, 9, 10], bit_vec.collect::<Vec<_>>());
     }
 
     #[test]
     fn bit_vec_bounds() {
-        let bit_vec = BitVec::new(12);
+        let mut bit_vec = BitVec::new(12);
 
         // Past the end. BitVec does no bounds checking so rustc can inline its methods
-        assert_eq!(None, bit_vec.find(12));
-        assert_eq!(None, bit_vec.find(13));
-        assert_eq!(None, bit_vec.find(14));
-        assert_eq!(None, bit_vec.find(15));
-
-        let bit_vec = BitVec::new(64);
-
-        // Assure the last byte is correct even when it's a multiple of BitVec::WORD_BITS
-        assert_eq!(Some(56), bit_vec.find(56));
-        assert_eq!(Some(57), bit_vec.find(57));
-        assert_eq!(Some(58), bit_vec.find(58));
-        assert_eq!(Some(59), bit_vec.find(59));
-        assert_eq!(Some(60), bit_vec.find(60));
-        assert_eq!(Some(61), bit_vec.find(61));
-        assert_eq!(Some(62), bit_vec.find(62));
-        assert_eq!(Some(63), bit_vec.find(63));
+        bit_vec.skip_to(12);
+        assert_eq!(vec![0; 0], bit_vec.collect::<Vec<_>>());
     }
 
     #[test]
