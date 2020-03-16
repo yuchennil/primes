@@ -270,7 +270,7 @@ struct Wheel {
     origin_primes: Vec<usize>,
     segment_start: usize,
     segment_end: usize,
-    segment: Segment,
+    wheel_segment: WheelSegment,
 }
 
 impl From<Origin> for Wheel {
@@ -280,17 +280,15 @@ impl From<Origin> for Wheel {
 
         let segment_start = cmp::min(state.start, end);
         let segment_end = cmp::min(segment_start + Sieve::SEGMENT_LENGTH, end);
-        let segment = Segment::new(segment_start, segment_end);
+        let wheel_segment = WheelSegment::new(&origin_primes, segment_start, segment_end);
 
-        let mut state = Wheel {
+        Wheel {
             end,
             origin_primes,
             segment_start,
             segment_end,
-            segment,
-        };
-        state.sieve_segment();
-        state
+            wheel_segment,
+        }
     }
 }
 
@@ -298,18 +296,11 @@ impl Iterator for Wheel {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.segment.next()
+        self.wheel_segment.next()
     }
 }
 
 impl Wheel {
-    /// Sieve a segment [start, end) based on an origin segment.
-    fn sieve_segment(&mut self) {
-        self.segment = Segment::new(self.segment_start, self.segment_end);
-        self.segment.strike_wheel_primes(&self.origin_primes);
-        self.segment.initialize_iterator();
-    }
-
     // Was this the last segment to sieve?
     fn done(&self) -> bool {
         self.segment_end == self.end
@@ -319,29 +310,84 @@ impl Wheel {
     fn advance_segment(mut self) -> Self {
         self.segment_start = self.segment_end;
         self.segment_end = cmp::min(self.segment_start + Sieve::SEGMENT_LENGTH, self.end);
-
-        self.sieve_segment();
+        self.wheel_segment =
+            WheelSegment::new(&self.origin_primes, self.segment_start, self.segment_end);
 
         self
     }
 }
 
-struct Segment {
-    segment_start: usize,
-    spokes: [Spoke; Sieve::SPOKE_SIZE],
+struct WheelSegment {
+    segment: Segment,
     next_prime: collections::BinaryHeap<(cmp::Reverse<usize>, usize)>,
 }
 
-impl Iterator for Segment {
+impl Iterator for WheelSegment {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (cmp::Reverse(p), spoke_index) = self.next_prime.pop()?;
-        if let Some(next_p) = self.spokes[spoke_index].next() {
+        if let Some(next_p) = self.segment.spokes[spoke_index].next() {
             self.next_prime.push((cmp::Reverse(next_p), spoke_index));
         }
         Some(p)
     }
+}
+
+impl WheelSegment {
+    fn new(origin_primes: &[usize], segment_start: usize, segment_end: usize) -> WheelSegment {
+        let mut segment = Segment::new(segment_start, segment_end);
+        WheelSegment::strike_primes(origin_primes, segment_start, &mut segment);
+        let next_prime = WheelSegment::initialize_next_prime(&mut segment);
+
+        WheelSegment {
+            segment,
+            next_prime,
+        }
+    }
+
+    /// Strike primes for all spokes in this segment.
+    fn strike_primes(origin_primes: &[usize], segment_start: usize, segment: &mut Segment) {
+        let mut multiples = arr![Vec::with_capacity(origin_primes.len()); 48];
+        for &p in origin_primes {
+            // Start at p^2, or skip ahead to the first spoke in this segment.
+            let factor = cmp::max(p, WheelSegment::first_wheel_factor(p, segment_start));
+            let mut multiple = p * factor;
+            for spoke_gap in Segment::wheel_iter(factor) {
+                multiples[Segment::spoke(multiple)].push(multiple);
+                multiple += p * spoke_gap;
+            }
+        }
+
+        // Iterate through all primes in all spokes in spoke-major order for cache locality.
+        for (spoke, spoke_multiples) in segment.spokes.iter_mut().zip(multiples.iter()) {
+            for (&p, &multiple) in origin_primes.iter().zip(spoke_multiples.iter()) {
+                spoke.strike_prime(p, multiple);
+            }
+        }
+    }
+
+    // Populate the next_primes heap with the first primes of each spoke
+    fn initialize_next_prime(
+        segment: &mut Segment,
+    ) -> collections::BinaryHeap<(cmp::Reverse<usize>, usize)> {
+        let mut next_prime = collections::BinaryHeap::new();
+        for (spoke_index, spoke) in segment.spokes.iter_mut().enumerate() {
+            if let Some(next_spoke_prime) = spoke.next() {
+                next_prime.push((cmp::Reverse(next_spoke_prime), spoke_index));
+            }
+        }
+        next_prime
+    }
+
+    fn first_wheel_factor(p: usize, segment_start: usize) -> usize {
+        let n = ceil_div(segment_start, p);
+        (n / Sieve::WHEEL_SIZE) * Sieve::WHEEL_SIZE + Segment::WHEEL[Segment::spoke(n)]
+    }
+}
+
+struct Segment {
+    spokes: [Spoke; Sieve::SPOKE_SIZE],
 }
 
 impl Segment {
@@ -371,13 +417,8 @@ impl Segment {
         let spoke_builder = |spoke| Spoke::new(Segment::WHEEL[spoke], segment_start, segment_end);
         let mut spoke = 0;
         let spokes = arr![spoke_builder({spoke += 1; spoke - 1}); 48];
-        let next_prime = collections::BinaryHeap::new();
 
-        Segment {
-            segment_start,
-            spokes,
-            next_prime,
-        }
+        Segment { spokes }
     }
 
     /// Strike p for all spokes in the origin segment.
@@ -389,37 +430,6 @@ impl Segment {
         for spoke_gap in Segment::wheel_iter(factor) {
             self.spokes[Segment::spoke(multiple)].strike_prime(p, multiple);
             multiple += p * spoke_gap;
-        }
-    }
-
-    /// Strike primes for all spokes in this segment.
-    fn strike_wheel_primes(&mut self, primes: &[usize]) {
-        let mut multiples = arr![Vec::with_capacity(primes.len()); 48];
-        for &p in primes {
-            // Start at p^2, or skip ahead to the first spoke in this segment.
-            let factor = cmp::max(p, self.first_wheel_factor(p));
-            let mut multiple = p * factor;
-            for spoke_gap in Segment::wheel_iter(factor) {
-                multiples[Segment::spoke(multiple)].push(multiple);
-                multiple += p * spoke_gap;
-            }
-        }
-
-        // Iterate through all primes in all spokes in spoke-major order for cache locality.
-        for (spoke, spoke_multiples) in self.spokes.iter_mut().zip(multiples.iter()) {
-            for (&p, &multiple) in primes.iter().zip(spoke_multiples.iter()) {
-                spoke.strike_prime(p, multiple);
-            }
-        }
-    }
-
-    // Populate the next_primes heap with the first primes of each spoke
-    fn initialize_iterator(&mut self) {
-        for (spoke_index, spoke) in self.spokes.iter_mut().enumerate() {
-            if let Some(next_spoke_prime) = spoke.next() {
-                self.next_prime
-                    .push((cmp::Reverse(next_spoke_prime), spoke_index));
-            }
         }
     }
 
@@ -437,10 +447,6 @@ impl Segment {
         min_p
     }
 
-    fn first_wheel_factor(&self, p: usize) -> usize {
-        let n = ceil_div(self.segment_start, p);
-        (n / Sieve::WHEEL_SIZE) * Sieve::WHEEL_SIZE + Segment::WHEEL[Segment::spoke(n)]
-    }
     fn wheel_iter(factor: usize) -> impl Iterator<Item = &'static usize> {
         Segment::SPOKE_GAPS
             .iter()
@@ -778,7 +784,7 @@ mod tests {
 
     #[test]
     fn segment_correct() {
-        let mut segment = Segment::new(140, 240);
+        let mut segment = Segment::new(0, 240);
 
         // find_origin_prime() when all true
         assert_eq!(Some(143), segment.find_origin_prime(142));
@@ -794,8 +800,9 @@ mod tests {
         assert_eq!(None, segment.find_origin_prime(240));
         assert_eq!(None, segment.find_origin_prime(241));
 
-        // strike_wheel_primes()
-        segment.strike_wheel_primes(&[11, 13]);
+        // strike_origin_prime()
+        segment.strike_origin_prime(11);
+        segment.strike_origin_prime(13);
 
         // find_origin_prime() after sieving
         assert_eq!(Some(149), segment.find_origin_prime(142));
@@ -913,11 +920,9 @@ mod tests {
 
     #[bench]
     fn wheel_segment(b: &mut test::Bencher) {
-        let mut state = SieveStateMachine::new(9_876_543_210, 10_usize.pow(10));
-        state.step();
-        state.step();
-        if let SieveStateMachine::Wheel(mut wheel) = state {
-            b.iter(|| wheel.sieve_segment())
-        }
+        let origin_primes = Origin::primes(10_000);
+        let segment_start = 9_876_543_210;
+        let segment_end = segment_start + Sieve::SEGMENT_LENGTH;
+        b.iter(|| WheelSegment::new(&origin_primes, segment_start, segment_end))
     }
 }
