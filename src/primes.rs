@@ -241,13 +241,11 @@ impl Origin {
         let mut origin_primes = Vec::new();
 
         let mut origin_segment = OriginSegment::new(origin_end);
-        let mut n = Sieve::FIRST_NON_BASIS_PRIME;
-        while let Some(p) = origin_segment.find_prime(n) {
+        while let Some(p) = origin_segment.next() {
             origin_primes.push(p);
             if p * p < origin_end {
                 origin_segment.strike_prime(p);
             }
-            n = p + 1;
         }
 
         origin_primes
@@ -268,13 +266,34 @@ impl Origin {
 
 struct OriginSegment {
     segment: Segment,
+    n: usize,
+}
+
+impl Iterator for OriginSegment {
+    type Item = usize;
+
+    /// Find the next prime at or after n in the segment.
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut option_min_p = None;
+        for spoke in self.segment.spokes.iter() {
+            if let Some(p) = spoke.find_prime(self.n) {
+                option_min_p = match option_min_p {
+                    Some(min_p) if min_p <= p => option_min_p,
+                    _ => Some(p),
+                }
+            }
+        }
+        self.n = option_min_p? + 1;
+        option_min_p
+    }
 }
 
 impl OriginSegment {
     fn new(origin_end: usize) -> OriginSegment {
         let segment = Segment::new(0, origin_end);
+        let n = Sieve::FIRST_NON_BASIS_PRIME;
 
-        OriginSegment { segment }
+        OriginSegment { segment, n }
     }
 
     /// Strike p for all spokes in the origin segment.
@@ -287,20 +306,6 @@ impl OriginSegment {
             self.segment.spokes[Segment::spoke(multiple)].strike_prime(p, multiple);
             multiple += p * spoke_gap;
         }
-    }
-
-    /// Find the next prime at or after n in the segment.
-    fn find_prime(&self, n: usize) -> Option<usize> {
-        let mut min_p = None;
-        for spoke in self.segment.spokes.iter() {
-            if let Some(p) = spoke.find_prime(n) {
-                min_p = match min_p {
-                    Some(min_p) if min_p <= p => Some(min_p),
-                    _ => Some(p),
-                }
-            }
-        }
-        min_p
     }
 }
 
@@ -799,37 +804,40 @@ mod tests {
     fn origin_segment_correct() {
         let mut origin_segment = OriginSegment::new(240);
 
-        // find_prime() when all true
-        assert_eq!(Some(143), origin_segment.find_prime(142));
-        assert_eq!(Some(143), origin_segment.find_prime(143));
-        assert_eq!(Some(149), origin_segment.find_prime(144));
-        assert_eq!(Some(209), origin_segment.find_prime(208));
-        assert_eq!(Some(209), origin_segment.find_prime(209));
-        assert_eq!(Some(211), origin_segment.find_prime(210));
-        assert_eq!(Some(211), origin_segment.find_prime(211));
-        assert_eq!(Some(221), origin_segment.find_prime(212));
-        assert_eq!(Some(239), origin_segment.find_prime(238));
-        assert_eq!(Some(239), origin_segment.find_prime(239));
-        assert_eq!(None, origin_segment.find_prime(240));
-        assert_eq!(None, origin_segment.find_prime(241));
-
         // strike_prime()
         origin_segment.strike_prime(11);
         origin_segment.strike_prime(13);
 
-        // find_prime() after sieving
-        assert_eq!(Some(149), origin_segment.find_prime(142));
-        assert_eq!(Some(149), origin_segment.find_prime(143));
-        assert_eq!(Some(149), origin_segment.find_prime(144));
-        assert_eq!(Some(211), origin_segment.find_prime(208));
-        assert_eq!(Some(211), origin_segment.find_prime(209));
-        assert_eq!(Some(211), origin_segment.find_prime(210));
-        assert_eq!(Some(211), origin_segment.find_prime(211));
-        assert_eq!(Some(223), origin_segment.find_prime(212));
-        assert_eq!(Some(239), origin_segment.find_prime(238));
-        assert_eq!(Some(239), origin_segment.find_prime(239));
-        assert_eq!(None, origin_segment.find_prime(240));
-        assert_eq!(None, origin_segment.find_prime(241));
+        // next() after sieving
+        origin_segment.n = 140;
+        assert_eq!(
+            vec![
+                /* 11 * 13 = 143, */
+                149,
+                151,
+                157,
+                163,
+                167,
+                /* 13 * 13 = 169, */
+                173,
+                179,
+                181,
+                /* 11 * 17 = 187, */
+                191,
+                193,
+                197,
+                199,
+                /* 11 * 19 = 209, */
+                210 + 1,
+                /* 13 * 17 = 221, */
+                210 + 13,
+                210 + 17,
+                210 + 19,
+                210 + 23,
+                210 + 29
+            ],
+            origin_segment.collect::<Vec<_>>()
+        );
     }
 
     #[test]
