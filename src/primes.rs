@@ -555,10 +555,11 @@ impl Iterator for BitVec {
             match BitVec::find_first_set(masked_word) {
                 Some(bit_index) => {
                     let result = (self.word_index << BitVec::SHIFT) + bit_index;
-                    self.bit_index = bit_index + 1;
-                    if self.bit_index == BitVec::WORD_BITS {
+                    if bit_index + 1 == BitVec::WORD_BITS {
                         self.word_index += 1;
                         self.bit_index = 0;
+                    } else {
+                        self.bit_index = bit_index + 1;
                     }
                     return Some(result);
                 }
