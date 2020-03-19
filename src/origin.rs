@@ -2,6 +2,7 @@ use std::cmp;
 use std::ops;
 
 use crate::basis::Basis;
+use crate::constants::FIRST_NON_BASIS_PRIME;
 use crate::segment::OriginSegment;
 
 pub struct Origin {
@@ -56,11 +57,13 @@ impl Origin {
         let mut origin_primes = Vec::new();
 
         let mut origin_segment = OriginSegment::new(origin_end);
-        while let Some(p) = origin_segment.next() {
+        let mut n = FIRST_NON_BASIS_PRIME;
+        while let Some(p) = origin_segment.find_prime(n) {
             origin_primes.push(p);
             if p * p < origin_end {
                 origin_segment.strike_prime(p);
             }
+            n = p + 1;
         }
 
         origin_primes

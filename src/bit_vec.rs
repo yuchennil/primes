@@ -191,17 +191,27 @@ impl BitVec {
         self.bit_vec[index >> BitVec::SHIFT] &= BitVec::UNSET_BIT[index & BitVec::MASK]
     }
 
-    pub fn skip_to(&mut self, index: usize) {
-        self.word_index = index >> BitVec::SHIFT;
-        self.bit_index = index & BitVec::MASK;
-    }
-
     /// Find the first set bit in word. This index is equal to the number of word's trailing zeros.
     fn find_first_set(word: u64) -> Option<usize> {
         if word == 0 {
             return None;
         }
         Some(word.trailing_zeros() as usize)
+    }
+
+    pub fn find(&self, index: usize) -> Option<usize> {
+        let first_word_index = index >> BitVec::SHIFT;
+        for (word_index, &word) in self.bit_vec[first_word_index..].iter().enumerate() {
+            let masked_word = if word_index == 0 {
+                word & BitVec::GREATER_OR_EQUAL_BITS[index & BitVec::MASK]
+            } else {
+                word
+            };
+            if let Some(bit_index) = BitVec::find_first_set(masked_word) {
+                return Some(((first_word_index + word_index) << BitVec::SHIFT) + bit_index);
+            }
+        }
+        None
     }
 }
 
@@ -223,14 +233,14 @@ mod tests {
         assert_eq!(vec![0, 1, 4, 6, 8, 9, 10], bit_vec.collect::<Vec<_>>());
     }
 
-    #[test]
-    fn bit_vec_bounds() {
-        let mut bit_vec = BitVec::new(12);
+    // #[test]
+    // fn bit_vec_bounds() {
+    //     let mut bit_vec = BitVec::new(12);
 
-        // Past the end. BitVec does no bounds checking so rustc can inline its methods
-        bit_vec.skip_to(12);
-        assert_eq!(vec![0; 0], bit_vec.collect::<Vec<_>>());
-    }
+    //     // Past the end. BitVec does no bounds checking so rustc can inline its methods
+    //     bit_vec.skip_to(12);
+    //     assert_eq!(vec![0; 0], bit_vec.collect::<Vec<_>>());
+    // }
 
     #[test]
     fn bit_vec_find_first_set() {

@@ -45,10 +45,11 @@ impl Spoke {
         }
     }
 
-    /// Skip the spoke iterator forward to n.
-    pub fn skip_to(&mut self, n: usize) {
+    /// Find the next prime at or after n in the spoke.
+    pub fn find_prime(&self, n: usize) -> Option<usize> {
         let spoke_n = self.n_to_spoke(n);
-        self.sieve.skip_to(spoke_n);
+        let spoke_p = self.sieve.find(spoke_n)?;
+        Some(self.spoke_to_n(spoke_p))
     }
 
     /// Convert between number space and spoke space.
