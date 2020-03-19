@@ -45,13 +45,6 @@ impl Spoke {
         }
     }
 
-    /// Find the next prime at or after n in the spoke.
-    pub fn find_prime(&self, n: usize) -> Option<usize> {
-        let spoke_n = self.n_to_spoke(n);
-        let spoke_p = self.sieve.find(spoke_n)?;
-        Some(self.spoke_to_n(spoke_p))
-    }
-
     /// Convert between number space and spoke space.
     fn n_to_spoke_start(n: usize, residue: usize) -> usize {
         n / WHEEL_SIZE + (n % WHEEL_SIZE > residue) as usize

@@ -198,21 +198,6 @@ impl BitVec {
         }
         Some(word.trailing_zeros() as usize)
     }
-
-    pub fn find(&self, index: usize) -> Option<usize> {
-        let first_word_index = index >> BitVec::SHIFT;
-        for (word_index, &word) in self.bit_vec[first_word_index..].iter().enumerate() {
-            let masked_word = if word_index == 0 {
-                word & BitVec::GREATER_OR_EQUAL_BITS[index & BitVec::MASK]
-            } else {
-                word
-            };
-            if let Some(bit_index) = BitVec::find_first_set(masked_word) {
-                return Some(((first_word_index + word_index) << BitVec::SHIFT) + bit_index);
-            }
-        }
-        None
-    }
 }
 
 #[cfg(test)]

@@ -34,41 +34,54 @@ use crate::spoke::Spoke;
 /// can further optimize constant p-increment iteration with loop unrolling and SIMD instructions.
 
 pub struct OriginSegment {
-    segment: Segment,
+    spoke: Vec<bool>,
 }
 
 impl OriginSegment {
+    /// Create an unsieved OriginSegment in [start, end).
     pub fn new(origin_end: usize) -> OriginSegment {
-        let segment = Segment::new(0, origin_end);
+        let spoke_length = OriginSegment::n_to_spoke(origin_end);
+        let spoke = vec![true; spoke_length];
 
-        OriginSegment { segment }
+        let mut origin_segment = OriginSegment {
+            spoke,
+        };
+        origin_segment.strike_prime(3);
+        origin_segment.strike_prime(5);
+        origin_segment.strike_prime(7);
+        origin_segment
     }
 
-    /// Strike p for all spokes in the origin segment.
+    /// Strike multiples of prime in this spoke.
+    ///
+    /// Note that a step size of p in the spoke corresponds to a step of WHEEL_SIZE * p in u64s.
     pub fn strike_prime(&mut self, p: usize) {
-        // Optimize by striking multiples from p^2. Smaller multiples should already have been
-        // struck by previous primes.
-        let factor = p;
-        let mut multiple = p * factor;
-        for spoke_gap in Segment::wheel_iter(factor) {
-            self.segment.spokes[Segment::spoke(multiple)].strike_prime(p, multiple);
-            multiple += p * spoke_gap;
+        // This while loop is equivalent to a for loop that steps by p, except it's 30-40% more
+        // efficient, according to benchmarks.
+        let mut spoke_multiple = OriginSegment::n_to_spoke(p * p);
+        while spoke_multiple < self.spoke.len() {
+            self.spoke[spoke_multiple] = false;
+            spoke_multiple += p;
         }
     }
 
-    /// Find the next prime at or after n in the segment.
-    #[inline]
+    /// Find the next prime at or after n in the spoke.
     pub fn find_prime(&self, n: usize) -> Option<usize> {
-        let mut min_p = None;
-        for spoke in self.segment.spokes.iter() {
-            if let Some(p) = spoke.find_prime(n) {
-                min_p = match min_p {
-                    Some(min_p) if min_p <= p => Some(min_p),
-                    _ => Some(p),
-                }
+        for spoke_n in OriginSegment::n_to_spoke(n)..self.spoke.len() {
+            if self.spoke[spoke_n] {
+                let p = OriginSegment::spoke_to_n(spoke_n);
+                return Some(p);
             }
         }
-        min_p
+        None
+    }
+
+    /// Convert between number space and spoke space.
+    fn n_to_spoke(n: usize) -> usize {
+        n / 2
+    }
+    fn spoke_to_n(spoke_n: usize) -> usize {
+        2 * spoke_n + 1
     }
 }
 
