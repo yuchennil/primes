@@ -2,14 +2,14 @@ use std::cmp;
 
 use crate::constants::SEGMENT_LENGTH;
 use crate::origin::Origin;
-use crate::segment::WheelSegment;
+use crate::segment::Segment;
 
 pub struct Wheel {
     end: usize,
     origin_primes: Vec<usize>,
     segment_start: usize,
     segment_end: usize,
-    wheel_segment: WheelSegment,
+    segment: Segment,
 }
 
 impl From<Origin> for Wheel {
@@ -19,14 +19,14 @@ impl From<Origin> for Wheel {
 
         let segment_start = cmp::min(state.start, end);
         let segment_end = cmp::min(segment_start + SEGMENT_LENGTH, end);
-        let wheel_segment = WheelSegment::new(&origin_primes, segment_start, segment_end);
+        let segment = Segment::new(&origin_primes, segment_start, segment_end);
 
         Wheel {
             end,
             origin_primes,
             segment_start,
             segment_end,
-            wheel_segment,
+            segment,
         }
     }
 }
@@ -36,7 +36,7 @@ impl Iterator for Wheel {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.wheel_segment.next()
+        self.segment.next()
     }
 }
 
@@ -50,8 +50,7 @@ impl Wheel {
     pub fn advance_segment(mut self) -> Self {
         self.segment_start = self.segment_end;
         self.segment_end = cmp::min(self.segment_start + SEGMENT_LENGTH, self.end);
-        self.wheel_segment =
-            WheelSegment::new(&self.origin_primes, self.segment_start, self.segment_end);
+        self.segment = Segment::new(&self.origin_primes, self.segment_start, self.segment_end);
 
         self
     }

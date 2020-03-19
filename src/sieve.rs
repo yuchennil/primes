@@ -69,7 +69,7 @@ impl Iterator for Sieve {
 mod tests {
     use crate::constants::SEGMENT_LENGTH;
     use crate::origin::Origin;
-    use crate::segment::WheelSegment;
+    use crate::segment::Segment;
 
     use super::*;
 
@@ -144,6 +144,6 @@ mod tests {
         let origin_primes = Origin::primes(10_000);
         let segment_start = 9_876_543_210;
         let segment_end = segment_start + SEGMENT_LENGTH;
-        b.iter(|| WheelSegment::new(&origin_primes, segment_start, segment_end))
+        b.iter(|| Segment::new(&origin_primes, segment_start, segment_end))
     }
 }
