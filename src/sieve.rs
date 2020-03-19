@@ -51,6 +51,7 @@ impl Sieve {
 impl Iterator for Sieve {
     type Item = u64;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some(p) = self.state_machine.next() {

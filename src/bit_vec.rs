@@ -9,6 +9,7 @@ pub struct BitVec {
 impl Iterator for BitVec {
     type Item = usize;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let word = self.bit_vec.get(self.word_index)?;

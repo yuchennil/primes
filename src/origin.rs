@@ -14,6 +14,7 @@ pub struct Origin {
 impl Iterator for Origin {
     type Item = usize;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let origin_primes_index = self.origin_primes_index_iter.next()?;
         Some(self.origin_primes[origin_primes_index])

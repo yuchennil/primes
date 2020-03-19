@@ -34,6 +34,7 @@ impl From<Origin> for Wheel {
 impl Iterator for Wheel {
     type Item = usize;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.wheel_segment.next()
     }

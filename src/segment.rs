@@ -42,6 +42,7 @@ impl Iterator for OriginSegment {
     type Item = usize;
 
     /// Find the next prime at or after n in the segment.
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let mut option_min_p = None;
         for spoke in self.segment.spokes.iter_mut() {
@@ -87,6 +88,7 @@ pub struct WheelSegment {
 impl Iterator for WheelSegment {
     type Item = usize;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let (cmp::Reverse(p), spoke_index) = self.next_prime.pop()?;
         if let Some(next_p) = self.segment.spokes[spoke_index].next() {
