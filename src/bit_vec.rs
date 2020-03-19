@@ -217,15 +217,6 @@ mod tests {
         assert_eq!(vec![0, 1, 4, 6, 8, 9, 10], bit_vec.collect::<Vec<_>>());
     }
 
-    // #[test]
-    // fn bit_vec_bounds() {
-    //     let mut bit_vec = BitVec::new(12);
-
-    //     // Past the end. BitVec does no bounds checking so rustc can inline its methods
-    //     bit_vec.skip_to(12);
-    //     assert_eq!(vec![0; 0], bit_vec.collect::<Vec<_>>());
-    // }
-
     #[test]
     fn bit_vec_find_first_set() {
         assert_eq!(None, BitVec::find_first_set(0b00000000));
