@@ -3,7 +3,6 @@ use std::ops;
 
 use crate::basis::Basis;
 use crate::constants::FIRST_NON_BASIS_PRIME;
-use crate::segment::OriginSegment;
 
 pub struct Origin {
     pub start: usize,
@@ -79,5 +78,98 @@ impl Origin {
         } else {
             origin_primes.len()
         }
+    }
+}
+
+struct OriginSegment {
+    spoke: Vec<bool>,
+}
+
+impl OriginSegment {
+    /// Create an unsieved OriginSegment in [start, end).
+    fn new(origin_end: usize) -> OriginSegment {
+        let spoke_length = OriginSegment::n_to_spoke(origin_end);
+        let spoke = vec![true; spoke_length];
+
+        let mut origin_segment = OriginSegment { spoke };
+        origin_segment.strike_prime(3);
+        origin_segment.strike_prime(5);
+        origin_segment.strike_prime(7);
+        origin_segment
+    }
+
+    /// Strike multiples of prime in this spoke.
+    ///
+    /// Note that a step size of p in the spoke corresponds to a step of WHEEL_SIZE * p in u64s.
+    fn strike_prime(&mut self, p: usize) {
+        // This while loop is equivalent to a for loop that steps by p, except it's 30-40% more
+        // efficient, according to benchmarks.
+        let mut spoke_multiple = OriginSegment::n_to_spoke(p * p);
+        while spoke_multiple < self.spoke.len() {
+            self.spoke[spoke_multiple] = false;
+            spoke_multiple += p;
+        }
+    }
+
+    /// Find the next prime at or after n in the spoke.
+    #[inline]
+    fn find_prime(&self, n: usize) -> Option<usize> {
+        for spoke_n in OriginSegment::n_to_spoke(n)..self.spoke.len() {
+            if self.spoke[spoke_n] {
+                let p = OriginSegment::spoke_to_n(spoke_n);
+                return Some(p);
+            }
+        }
+        None
+    }
+
+    /// Convert between number space and spoke space.
+    fn n_to_spoke(n: usize) -> usize {
+        n / 2
+    }
+    fn spoke_to_n(spoke_n: usize) -> usize {
+        2 * spoke_n + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn origin_segment_correct() {
+        let mut origin_segment = OriginSegment::new(240);
+
+        // find_prime() when all true
+        assert_eq!(Some(143), origin_segment.find_prime(142));
+        assert_eq!(Some(143), origin_segment.find_prime(143));
+        assert_eq!(Some(149), origin_segment.find_prime(144));
+        assert_eq!(Some(209), origin_segment.find_prime(208));
+        assert_eq!(Some(209), origin_segment.find_prime(209));
+        assert_eq!(Some(211), origin_segment.find_prime(210));
+        assert_eq!(Some(211), origin_segment.find_prime(211));
+        assert_eq!(Some(221), origin_segment.find_prime(212));
+        assert_eq!(Some(239), origin_segment.find_prime(238));
+        assert_eq!(Some(239), origin_segment.find_prime(239));
+        assert_eq!(None, origin_segment.find_prime(240));
+        assert_eq!(None, origin_segment.find_prime(241));
+
+        // strike_prime()
+        origin_segment.strike_prime(11);
+        origin_segment.strike_prime(13);
+
+        // find_prime() after sieving
+        assert_eq!(Some(149), origin_segment.find_prime(142));
+        assert_eq!(Some(149), origin_segment.find_prime(143));
+        assert_eq!(Some(149), origin_segment.find_prime(144));
+        assert_eq!(Some(211), origin_segment.find_prime(208));
+        assert_eq!(Some(211), origin_segment.find_prime(209));
+        assert_eq!(Some(211), origin_segment.find_prime(210));
+        assert_eq!(Some(211), origin_segment.find_prime(211));
+        assert_eq!(Some(223), origin_segment.find_prime(212));
+        assert_eq!(Some(239), origin_segment.find_prime(238));
+        assert_eq!(Some(239), origin_segment.find_prime(239));
+        assert_eq!(None, origin_segment.find_prime(240));
+        assert_eq!(None, origin_segment.find_prime(241));
     }
 }
