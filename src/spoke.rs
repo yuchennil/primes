@@ -36,8 +36,12 @@ impl Spoke {
     ///
     /// Note that a step size of p in the spoke corresponds to a step of WHEEL_SIZE * p in u64s.
     pub fn strike_prime(&mut self, p: usize, multiple: usize) {
-        for spoke_multiple in (self.n_to_spoke(multiple)..self.spoke_length).step_by(p) {
+        // This while loop is equivalent to a for loop that steps by p, except it's 30-40% more
+        // efficient, according to benchmarks.
+        let mut spoke_multiple = self.n_to_spoke(multiple);
+        while spoke_multiple < self.spoke_length {
             self.sieve.unset(spoke_multiple);
+            spoke_multiple += p;
         }
     }
 
