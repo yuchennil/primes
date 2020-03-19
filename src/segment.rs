@@ -2,8 +2,8 @@ use arr_macro::arr;
 use std::cmp;
 use std::collections;
 
+use crate::constants::{ceil_div, SPOKE, SPOKE_GAPS, SPOKE_SIZE, WHEEL, WHEEL_SIZE};
 use crate::spoke::Spoke;
-use crate::constants::{SPOKE, SPOKE_GAPS, SPOKE_SIZE, WHEEL, WHEEL_SIZE, ceil_div};
 
 /// A Segment of the sieve consists of several spokes within the range [segment_start, segment_end).
 /// Each spoke is a residue class of the multiplicative group of integers modulo n: (Z / n Z)^x,
@@ -147,7 +147,6 @@ struct Segment {
 }
 
 impl Segment {
-
     /// Create an unsieved Segment in [start, end).
     fn new(segment_start: usize, segment_end: usize) -> Segment {
         let spoke_builder = |spoke| Spoke::new(WHEEL[spoke], segment_start, segment_end);

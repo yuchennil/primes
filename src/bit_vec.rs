@@ -215,7 +215,6 @@ impl BitVec {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

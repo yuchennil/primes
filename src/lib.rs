@@ -13,4 +13,4 @@ mod sieve_state_machine;
 mod spoke;
 mod wheel;
 
-pub use sieve::Sieve as Sieve;
+pub use sieve::Sieve;
