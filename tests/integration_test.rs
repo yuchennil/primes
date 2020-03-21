@@ -1,13 +1,17 @@
 use primes::Sieve;
 
 #[test]
-fn sieve_segmented() {
+fn sieve_segmented_small() {
     assert_eq!(vec![0; 0], Sieve::segmented(0).collect::<Vec<_>>());
     assert_eq!(vec![0; 0], Sieve::segmented(1).collect::<Vec<_>>());
     assert_eq!(vec![0; 0], Sieve::segmented(2).collect::<Vec<_>>());
     assert_eq!(vec![2], Sieve::segmented(3).collect::<Vec<_>>());
     assert_eq!(vec![2, 3], Sieve::segmented(4).collect::<Vec<_>>());
     assert_eq!(vec![2, 3, 5, 7], Sieve::segmented(9).collect::<Vec<_>>());
+}
+
+#[test]
+fn sieve_segmented_medium() {
     assert_eq!(
         vec![
             2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83,
@@ -26,7 +30,7 @@ fn sieve_segmented() {
 }
 
 #[test]
-fn sieve_range() {
+fn sieve_range_small() {
     assert_eq!(vec![2, 3, 5, 7], Sieve::range(0, 10).collect::<Vec<_>>());
     assert_eq!(vec![2, 3, 5, 7], Sieve::range(1, 11).collect::<Vec<_>>());
     assert_eq!(
@@ -35,5 +39,9 @@ fn sieve_range() {
     );
     assert_eq!(vec![3, 5, 7, 11], Sieve::range(3, 13).collect::<Vec<_>>());
     assert_eq!(vec![5, 7, 11, 13], Sieve::range(4, 14).collect::<Vec<_>>());
+}
+
+#[test]
+fn sieve_range_medium() {
     assert_eq!(vec![83, 89, 97], Sieve::range(80, 100).collect::<Vec<_>>());
 }
