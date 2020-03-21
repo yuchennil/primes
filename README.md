@@ -1,6 +1,14 @@
-# Wheel segmented sieve of Eratosthenes
+# Prime Generator
 
-Yuchen Lin
+This crate generates prime numbers using the Sieve of Eratosthenes, with
+several optimizations to take advantage of modern processors and memory. It's
+by no means the fastest sieve (see Kim Walisch's
+[primesieve](https://github.com/kimwalisch/primesieve/)), nor even
+the fastest in Rust (see Huon Wilson's
+[primal](https://docs.rs/primal/0.2.3/primal/)).
+
+But it does fit my main purpose (solving Project Euler problems), and I think
+this implementation is particularly legible and clean.
 
 ## License
 
