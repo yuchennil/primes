@@ -1,6 +1,6 @@
 use arr_macro::arr;
 use std::cmp;
-use std::collections;
+use std::mem;
 
 use crate::constants::{ceil_div, SPOKE, SPOKE_GAPS, SPOKE_SIZE, WHEEL, WHEEL_SIZE};
 use crate::spoke::Spoke;
@@ -34,8 +34,7 @@ use crate::spoke::Spoke;
 /// can further optimize constant p-increment iteration with loop unrolling and SIMD instructions.
 
 pub struct WheelSegment {
-    segment: Segment,
-    next_prime: collections::BinaryHeap<(cmp::Reverse<usize>, usize)>,
+    next_prime: KWayMerge,
 }
 
 impl Iterator for WheelSegment {
@@ -43,11 +42,7 @@ impl Iterator for WheelSegment {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let (cmp::Reverse(p), spoke_index) = self.next_prime.pop()?;
-        if let Some(next_p) = self.segment.spokes[spoke_index].next() {
-            self.next_prime.push((cmp::Reverse(next_p), spoke_index));
-        }
-        Some(p)
+        self.next_prime.next()
     }
 }
 
@@ -55,12 +50,9 @@ impl WheelSegment {
     pub fn new(origin_primes: &[usize], segment_start: usize, segment_end: usize) -> WheelSegment {
         let mut segment = Segment::new(segment_start, segment_end);
         WheelSegment::strike_primes(origin_primes, segment_start, &mut segment);
-        let next_prime = WheelSegment::initialize_next_prime(&mut segment);
+        let next_prime = KWayMerge::new(segment);
 
-        WheelSegment {
-            segment,
-            next_prime,
-        }
+        WheelSegment { next_prime }
     }
 
     /// Strike primes for all spokes in this segment.
@@ -84,22 +76,132 @@ impl WheelSegment {
         }
     }
 
-    // Populate the next_primes heap with the first primes of each spoke
-    fn initialize_next_prime(
-        segment: &mut Segment,
-    ) -> collections::BinaryHeap<(cmp::Reverse<usize>, usize)> {
-        let mut next_prime = collections::BinaryHeap::new();
-        for (spoke_index, spoke) in segment.spokes.iter_mut().enumerate() {
-            if let Some(next_spoke_prime) = spoke.next() {
-                next_prime.push((cmp::Reverse(next_spoke_prime), spoke_index));
-            }
-        }
-        next_prime
-    }
-
     fn first_wheel_factor(p: usize, segment_start: usize) -> usize {
         let n = ceil_div(segment_start, p);
         (n / WHEEL_SIZE) * WHEEL_SIZE + WHEEL[Segment::spoke(n)]
+    }
+}
+
+struct KWayMerge {
+    winner: Node,
+    losers: Vec<Node>,
+    level_offset: usize,
+    segment: Segment,
+}
+
+impl Iterator for KWayMerge {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (value, index) = self.winner.0.take()?;
+        let next_value = self.segment.spokes[index].next();
+        self.push(next_value, index);
+        Some(value)
+    }
+}
+
+impl KWayMerge {
+    fn new(mut segment: Segment) -> KWayMerge {
+        let level_offset = KWayMerge::level_offset(segment.spokes.len());
+        let (winner, losers) = KWayMerge::initialize_tree(level_offset, &mut segment);
+
+        KWayMerge {
+            winner,
+            losers,
+            level_offset,
+            segment,
+        }
+    }
+
+    fn push(&mut self, option_value: Option<usize>, index: usize) {
+        let mut current_index = self.leaf_index(index);
+        let mut current_value = match option_value {
+            Some(value) => Node(Some((value, index))),
+            None => Node(None),
+        };
+        while let Some(parent_index) = KWayMerge::parent(current_index) {
+            let parent_value = &mut self.losers[parent_index];
+            if parent_value < &mut current_value {
+                mem::swap(parent_value, &mut current_value);
+            }
+            current_index = parent_index;
+        }
+        // If winner had any existing value, it would be overwritten. self.push() should only
+        // be called after taking self.winner.
+        self.winner = current_value;
+    }
+
+    fn initialize_tree(level_offset: usize, segment: &mut Segment) -> (Node, Vec<Node>) {
+        let winners_size = KWayMerge::left_child(level_offset);
+        let mut winners = vec![Node(None); winners_size];
+        for (index, spoke) in segment.spokes.iter_mut().enumerate() {
+            winners[index + level_offset] = Node(match spoke.next() {
+                Some(value) => Some((value, index)),
+                None => None,
+            });
+        }
+
+        let mut losers = vec![Node(None); level_offset];
+        let mut curr_offset = level_offset;
+        while let Some(next_offset) = KWayMerge::parent(curr_offset) {
+            for next_index in next_offset..curr_offset {
+                let left_node = winners[KWayMerge::left_child(next_index)];
+                let right_node = winners[KWayMerge::right_child(next_index)];
+                let (winner, loser) = if left_node < right_node {
+                    (left_node, right_node)
+                } else {
+                    (right_node, left_node)
+                };
+                if winner.0.is_some() {
+                    winners[next_index] = winner;
+                }
+                if loser.0.is_some() {
+                    losers[next_index] = loser;
+                }
+            }
+            curr_offset = next_offset;
+        }
+
+        let winner = *winners.get(0).unwrap_or(&Node(None));
+
+        (winner, losers)
+    }
+
+    fn level_offset(k: usize) -> usize {
+        let mut power_of_two = 1;
+        while power_of_two < k {
+            power_of_two *= 2;
+        }
+        power_of_two - 1
+    }
+    fn leaf_index(&self, index: usize) -> usize {
+        index + self.level_offset
+    }
+    fn parent(index: usize) -> Option<usize> {
+        if index == 0 {
+            return None;
+        }
+        Some((index - 1) / 2)
+    }
+    fn left_child(index: usize) -> usize {
+        2 * index + 1
+    }
+    fn right_child(index: usize) -> usize {
+        2 * index + 2
+    }
+}
+
+#[derive(PartialEq, Eq, Ord, Copy, Clone)]
+struct Node(Option<(usize, usize)>);
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Node) -> Option<cmp::Ordering> {
+        Some(match (self.0, other.0) {
+            (Some(self_tuple), Some(other_tuple)) => self_tuple.cmp(&other_tuple),
+            (Some(_), None) => cmp::Ordering::Less,
+            (None, Some(_)) => cmp::Ordering::Greater,
+            (None, None) => cmp::Ordering::Equal,
+        })
     }
 }
 
