@@ -6,6 +6,7 @@ extern crate test;
 mod basis;
 mod bit_vec;
 mod constants;
+mod k_way_merge;
 mod origin;
 mod segment;
 mod sieve;
