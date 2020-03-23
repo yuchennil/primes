@@ -1,6 +1,13 @@
 use crate::bit_vec::BitVec;
 use crate::constants::WHEEL_SIZE;
 
+/// A Spoke holds candidate primes p in [segment_start, segment_end) satisfying
+///     p mod WHEEL_SIZE = residue
+///
+/// To strike all multiples of a prime in Spoke, it suffices to step the spoke_multiple by p
+/// and iterate through the whole Spoke. Doing so corresponds to stepping multiple by
+/// p * WHEEL_SIZE, which for coprime p and WHEEL_SIZE is the smallest next value of multiple that
+/// falls in this Spoke.
 pub struct Spoke {
     sieve: BitVec,
     residue: usize,
