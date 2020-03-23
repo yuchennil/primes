@@ -1,6 +1,32 @@
 use std::cmp;
 use std::mem;
 
+/// Merge k min-sorted iterators I over values T into a single min-sorted iterator over T
+///
+/// This is equivalent to pushing the least element of each iterator into a priority queue and then
+/// popping elements. But instead of using a BinaryHeap as the backing data store, we implement a
+/// loser tournament tree. This lets us avoid the double O(log(k)) cost of a pop() followed by a
+/// separate push().
+///
+/// The loser tournament tree has the following structure:
+///                                     winner
+///                                    loser[0]
+///                loser[1]                                loser[2]
+///      loser[3]            loser[4]            loser[5]            loser[6]
+/// iters[0]  iters[1]  iters[2]  iters[3]  iters[4]
+/// level_offset = 7
+///
+/// In this example tree, it's okay that iterators does not fill the last row. loser[6] exists and
+/// will always be None, but that doesn't affect performance.
+///
+/// To iterate through the KWayMerge:
+/// 1) Take winner's value
+/// 2) pop the next value off winner's iterator
+/// 3) starting from winner's iterator, replay tournament games in the brackets
+/// 4) assign the overall tournament winner to the (now-vacant) winner
+///
+/// Since only winner's brackets have changed during this iteration, no other games need to be
+/// replayed to maintain the heap property.
 pub struct KWayMerge<T, I>
 where
     T: Ord + Copy + Clone,
@@ -45,7 +71,7 @@ where
     }
 
     fn push(&mut self, option_value: Option<T>, index: usize) {
-        let mut current_index = self.leaf_index(index);
+        let mut current_index = index + self.level_offset;
         let mut current_value = match option_value {
             Some(value) => Node(Some((value, index))),
             None => Node(None),
@@ -105,9 +131,6 @@ where
         }
         power_of_two - 1
     }
-    fn leaf_index(&self, index: usize) -> usize {
-        index + self.level_offset
-    }
     fn parent(index: usize) -> Option<usize> {
         if index == 0 {
             return None;
@@ -133,5 +156,23 @@ impl<T: Ord + Copy + Clone> PartialOrd for Node<T> {
             (None, Some(_)) => cmp::Ordering::Greater,
             (None, None) => cmp::Ordering::Equal,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn k_way_merge_correct() {
+        let sorted_array0 = vec![2, 3, 5, 7, 11];
+        let sorted_array1 = vec![1, 1, 2, 3, 5, 8, 13];
+        let iterators = vec![sorted_array0.into_iter(), sorted_array1.into_iter()];
+
+        let k_way_merge = KWayMerge::new(iterators);
+        assert_eq!(
+            vec![1, 1, 2, 2, 3, 3, 5, 5, 7, 8, 11, 13],
+            k_way_merge.collect::<Vec<_>>()
+        );
     }
 }
