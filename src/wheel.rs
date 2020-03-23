@@ -4,6 +4,12 @@ use crate::constants::SEGMENT_LENGTH;
 use crate::origin::Origin;
 use crate::segment::WheelSegment;
 
+/// Iterate through wheel_segment within [segment_start, segment_end)
+///
+/// When primes in this WheelSegment run out:
+/// 1) If this reaches the overall end, then exit
+/// 2) step in place to a new [segment_start, segment_end)
+/// 3) create a new WheelSegment with these bounds and sieve it for primes.
 pub struct Wheel {
     end: usize,
     origin_primes: Vec<usize>,

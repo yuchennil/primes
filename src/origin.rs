@@ -4,6 +4,11 @@ use std::ops;
 use crate::basis::Basis;
 use crate::constants::FIRST_NON_BASIS_PRIME;
 
+/// Iterate through origin_primes within [start, end)
+///
+/// This requires first sieving through all primes below sqrt(end). We use a custom OriginSegment
+/// to sieve, as the WheelSegment's many Spokes carry extra initialization and sorting overhead
+/// that isn't relevant for smaller ranges of primes.
 pub struct Origin {
     pub start: usize,
     pub end: usize,

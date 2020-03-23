@@ -3,6 +3,7 @@ use std::ops;
 
 use crate::constants::{BASIS_PRIMES, FIRST_NON_BASIS_PRIME};
 
+/// Iterate through BASIS_PRIMES within [start, end)
 pub struct Basis {
     pub start: usize,
     pub end: usize,
