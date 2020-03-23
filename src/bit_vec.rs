@@ -1,5 +1,26 @@
 use crate::constants::ceil_div;
 
+/// Vector of boolean values optimized for prime sieving
+///
+/// Each bool in Rust is represented by a full 8-bit byte. For memory-constrained applications like
+/// prime sieving, it is eight times as memory-efficient to compress these values into a single byte
+/// and provide wrapper methods for access.
+///
+/// As it turns out, the only methods needed by a sieve are
+/// - create a new BitVec of trues
+/// - set a single index's bit to false
+/// - iterate over true bits in order
+///
+/// We implement a number of optimizations to improve performance:
+/// - use u64s as the backing data type. A modern 64-bit processor is just as fast at accessing and
+///   writing to a single 64-bit word as it is with a 32-bit or 8-bit subword
+/// - check u64 equality with 0 when iterating through words. Again, it's just as fast to check a
+///   whole word as it is to check a subword part (or even a bit).
+/// - use the builtin u64::trailing_zeros() method to calculate the first set bit in a u64. This
+///   is much faster than a naive search with bit masks, or even a custom bit hack using de Bruijn
+///   sequences.
+/// - use lookup tables to replace bitshift operations. If the UNSET_BITS and GREATER_OR_EQUAL_BITS
+///   tables are already in L1 cache, then they're faster to query than a variable bitshift.
 pub struct BitVec {
     bit_vec: Vec<u64>,
     word_index: usize,
