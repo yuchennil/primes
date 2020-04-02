@@ -29,7 +29,7 @@ use std::mem;
 /// replayed to maintain the heap property.
 pub struct KWayMerge<T, I>
 where
-    T: Ord + Copy + Clone,
+    T: Ord + Copy,
     I: Iterator<Item = T>,
 {
     iterators: Vec<I>,
@@ -40,7 +40,7 @@ where
 
 impl<T, I> Iterator for KWayMerge<T, I>
 where
-    T: Ord + Copy + Clone,
+    T: Ord + Copy,
     I: Iterator<Item = T>,
 {
     type Item = T;
@@ -55,7 +55,7 @@ where
 
 impl<T, I> KWayMerge<T, I>
 where
-    T: Ord + Copy + Clone,
+    T: Ord + Copy,
     I: Iterator<Item = T>,
 {
     pub fn new(mut iterators: Vec<I>) -> KWayMerge<T, I> {
@@ -146,9 +146,9 @@ where
 }
 
 #[derive(PartialEq, Copy, Clone)]
-struct Node<T: Ord + Copy + Clone>(Option<(T, usize)>);
+struct Node<T: Ord + Copy>(Option<(T, usize)>);
 
-impl<T: Ord + Copy + Clone> PartialOrd for Node<T> {
+impl<T: Ord + Copy> PartialOrd for Node<T> {
     fn partial_cmp(&self, other: &Node<T>) -> Option<cmp::Ordering> {
         Some(match (self.0, other.0) {
             (Some(self_tuple), Some(other_tuple)) => self_tuple.cmp(&other_tuple),
