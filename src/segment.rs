@@ -39,7 +39,6 @@ pub struct WheelSegment {
 impl Iterator for WheelSegment {
     type Item = usize;
 
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.next_prime.next()
     }

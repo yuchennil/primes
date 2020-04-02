@@ -13,7 +13,6 @@ pub struct Basis {
 impl Iterator for Basis {
     type Item = usize;
 
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let basis_primes_index = self.basis_primes_index_iter.next()?;
         Some(BASIS_PRIMES[basis_primes_index])
