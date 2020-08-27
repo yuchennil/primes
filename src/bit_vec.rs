@@ -59,138 +59,8 @@ impl BitVec {
     const SHIFT: usize = 6;
     const MASK: usize = 0b11_1111;
     const ONES: u64 = std::u64::MAX;
-    const UNSET_BIT: [u64; 64] = [
-        !(1 << 0),
-        !(1 << 1),
-        !(1 << 2),
-        !(1 << 3),
-        !(1 << 4),
-        !(1 << 5),
-        !(1 << 6),
-        !(1 << 7),
-        !(1 << 8),
-        !(1 << 9),
-        !(1 << 10),
-        !(1 << 11),
-        !(1 << 12),
-        !(1 << 13),
-        !(1 << 14),
-        !(1 << 15),
-        !(1 << 16),
-        !(1 << 17),
-        !(1 << 18),
-        !(1 << 19),
-        !(1 << 20),
-        !(1 << 21),
-        !(1 << 22),
-        !(1 << 23),
-        !(1 << 24),
-        !(1 << 25),
-        !(1 << 26),
-        !(1 << 27),
-        !(1 << 28),
-        !(1 << 29),
-        !(1 << 30),
-        !(1 << 31),
-        !(1 << 32),
-        !(1 << 33),
-        !(1 << 34),
-        !(1 << 35),
-        !(1 << 36),
-        !(1 << 37),
-        !(1 << 38),
-        !(1 << 39),
-        !(1 << 40),
-        !(1 << 41),
-        !(1 << 42),
-        !(1 << 43),
-        !(1 << 44),
-        !(1 << 45),
-        !(1 << 46),
-        !(1 << 47),
-        !(1 << 48),
-        !(1 << 49),
-        !(1 << 50),
-        !(1 << 51),
-        !(1 << 52),
-        !(1 << 53),
-        !(1 << 54),
-        !(1 << 55),
-        !(1 << 56),
-        !(1 << 57),
-        !(1 << 58),
-        !(1 << 59),
-        !(1 << 60),
-        !(1 << 61),
-        !(1 << 62),
-        !(1 << 63),
-    ];
-    const GREATER_OR_EQUAL_BITS: [u64; 64] = [
-        BitVec::ONES << 0,
-        BitVec::ONES << 1,
-        BitVec::ONES << 2,
-        BitVec::ONES << 3,
-        BitVec::ONES << 4,
-        BitVec::ONES << 5,
-        BitVec::ONES << 6,
-        BitVec::ONES << 7,
-        BitVec::ONES << 8,
-        BitVec::ONES << 9,
-        BitVec::ONES << 10,
-        BitVec::ONES << 11,
-        BitVec::ONES << 12,
-        BitVec::ONES << 13,
-        BitVec::ONES << 14,
-        BitVec::ONES << 15,
-        BitVec::ONES << 16,
-        BitVec::ONES << 17,
-        BitVec::ONES << 18,
-        BitVec::ONES << 19,
-        BitVec::ONES << 20,
-        BitVec::ONES << 21,
-        BitVec::ONES << 22,
-        BitVec::ONES << 23,
-        BitVec::ONES << 24,
-        BitVec::ONES << 25,
-        BitVec::ONES << 26,
-        BitVec::ONES << 27,
-        BitVec::ONES << 28,
-        BitVec::ONES << 29,
-        BitVec::ONES << 30,
-        BitVec::ONES << 31,
-        BitVec::ONES << 32,
-        BitVec::ONES << 33,
-        BitVec::ONES << 34,
-        BitVec::ONES << 35,
-        BitVec::ONES << 36,
-        BitVec::ONES << 37,
-        BitVec::ONES << 38,
-        BitVec::ONES << 39,
-        BitVec::ONES << 40,
-        BitVec::ONES << 41,
-        BitVec::ONES << 42,
-        BitVec::ONES << 43,
-        BitVec::ONES << 44,
-        BitVec::ONES << 45,
-        BitVec::ONES << 46,
-        BitVec::ONES << 47,
-        BitVec::ONES << 48,
-        BitVec::ONES << 49,
-        BitVec::ONES << 50,
-        BitVec::ONES << 51,
-        BitVec::ONES << 52,
-        BitVec::ONES << 53,
-        BitVec::ONES << 54,
-        BitVec::ONES << 55,
-        BitVec::ONES << 56,
-        BitVec::ONES << 57,
-        BitVec::ONES << 58,
-        BitVec::ONES << 59,
-        BitVec::ONES << 60,
-        BitVec::ONES << 61,
-        BitVec::ONES << 62,
-        BitVec::ONES << 63,
-    ];
+    const UNSET_BIT: [u64; 64] = unset_bit();
+    const GREATER_OR_EQUAL_BITS: [u64; 64] = greater_or_equal_bits();
 
     pub fn new(len: usize) -> BitVec {
         let mut bit_vec = vec![BitVec::ONES; ceil_div(len, BitVec::WORD_BITS)];
@@ -218,6 +88,26 @@ impl BitVec {
         }
         Some(word.trailing_zeros() as usize)
     }
+}
+
+const fn unset_bit() -> [u64; 64] {
+    let mut unset_bit = [0; 64];
+    let mut i = 0;
+    while i < 64 {
+        unset_bit[i] = !(1 << i);
+        i += 1;
+    }
+    unset_bit
+}
+
+const fn greater_or_equal_bits() -> [u64; 64] {
+    let mut greater_or_equal_bits = [0; 64];
+    let mut i = 0;
+    while i < 64 {
+        greater_or_equal_bits[i] = BitVec::ONES << i;
+        i += 1;
+    }
+    greater_or_equal_bits
 }
 
 #[cfg(test)]
